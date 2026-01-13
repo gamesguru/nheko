@@ -303,14 +303,35 @@ ApplicationWindow {
                     color: palette.text
                 }
 
-                ComboBox {
-                    model: [qsTr("Muted"), qsTr("Mentions only"), qsTr("All messages")]
-                    currentIndex: roomSettings.notifications
-                    onActivated: (index) => {
-                        roomSettings.changeNotifications(index);
-                    }
+                Item {
+                    height: notificationsCombo.height
                     Layout.fillWidth: true
-                    WheelHandler{} // suppress scrolling changing values
+
+                    ComboBox {
+                        id: notificationsCombo
+                        anchors.fill: parent
+                        model: [qsTr("Muted"), qsTr("Mentions only"), qsTr("All messages")]
+                        currentIndex: roomSettings.notifications
+                        onActivated: (index) => {
+                            roomSettings.changeNotifications(index);
+                        }
+
+                        enabled: activeFocus
+                        palette: Nheko.colors
+                        opacity: 1
+
+                        WheelHandler{} // suppress scrolling changing values
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        enabled: !notificationsCombo.activeFocus
+                        onClicked: {
+                            notificationsCombo.forceActiveFocus();
+                            notificationsCombo.togglePopup();
+                        }
+                        cursorShape: Qt.PointingHandCursor
+                    }
                 }
 
                 Label {

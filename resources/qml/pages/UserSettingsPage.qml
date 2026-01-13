@@ -95,15 +95,35 @@ Rectangle {
                         }
                         DelegateChoice {
                             roleValue: UserSettingsModel.Options
-                            ComboBox {
+                            Item {
                                 anchors.right: parent.right
-                                model: r.model.values
-                                currentIndex: r.model.value
-                                width: Math.min(implicitWidth, scroll.availableWidth - Nheko.paddingMedium)
-                                onActivated: r.model.value = currentIndex
-                                implicitContentWidthPolicy: ComboBox.WidestTextWhenCompleted
+                                height: child.height
+                                width: Math.min(child.implicitWidth, scroll.availableWidth - Nheko.paddingMedium)
 
-                                WheelHandler{} // suppress scrolling changing values
+                                ComboBox {
+                                    id: child
+                                    anchors.fill: parent
+                                    model: r.model.values
+                                    currentIndex: r.model.value
+                                    onActivated: r.model.value = currentIndex
+                                    implicitContentWidthPolicy: ComboBox.WidestTextWhenCompleted
+
+                                    enabled: activeFocus
+                                    palette: Nheko.colors
+                                    opacity: 1
+
+                                    WheelHandler{} // suppress scrolling changing values
+                                }
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    enabled: !child.activeFocus
+                                    onClicked: {
+                                        child.forceActiveFocus();
+                                        child.togglePopup();
+                                    }
+                                    cursorShape: Qt.PointingHandCursor
+                                }
                             }
                         }
                         DelegateChoice {
