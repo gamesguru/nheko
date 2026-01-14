@@ -314,7 +314,6 @@ ApplicationWindow {
                         currentIndex: roomSettings.notifications
                         onActivated: (index) => {
                             roomSettings.changeNotifications(index);
-                            roomSettingsDialog.isDirty = true;
                         }
                         
                         wheelEnabled: false
@@ -735,17 +734,7 @@ ApplicationWindow {
             console.log(flickable.visibleArea)
         }
     }
-    property bool isDirty: false
-
     footer: DialogButtonBox {
-        Button {
-            text: qsTr("Save")
-            DialogButtonBox.buttonRole: DialogButtonBox.ApplyRole
-            enabled: roomSettingsDialog.isDirty
-            onClicked: {
-                 roomSettingsDialog.isDirty = false
-            }
-        }
         standardButtons: DialogButtonBox.Ok
         onAccepted: close()
     }

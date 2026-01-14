@@ -107,7 +107,6 @@ Rectangle {
                                     currentIndex: r.model.value
                                     onActivated: {
                                         r.model.value = currentIndex
-                                        userSettingsDialog.isDirty = true
                                     }
                                     implicitContentWidthPolicy: ComboBox.WidestTextWhenCompleted
 
@@ -293,85 +292,17 @@ Rectangle {
         }
     }
 
-    property bool isDirty: false
-
-    Dialog {
-        id: confirmationDialog
-        title: qsTr("Unsaved Changes")
-        standardButtons: Dialog.Save | Dialog.Discard | Dialog.Cancel
-        anchors.centerIn: parent
-        modal: true
-        
-        Label {
-            text: qsTr("You have unsaved changes. Do you want to save them?")
-            color: palette.text
-        }
-        
-        onAccepted: { // Save
-            isDirty = false
-            console.log("Settings saved (implicitly applied)")
-            mainWindow.pop()
-        }
-        onDiscarded: { // Discard
-            isDirty = false
-            mainWindow.pop()
-        }
-        onRejected: { // Cancel
-            // Do nothing
-        }
-    }
-
-    Shortcut {
-        sequence: StandardKey.Cancel
-        onActivated: {
-            if (isDirty) {
-               confirmationDialog.open()
-            } else {
-               mainWindow.pop()
-            }
-        }
-    }
-
-    RowLayout {
-        id: headerLayout
+    ImageButton {
+        id: backButton
         anchors.top: parent.top
         anchors.left: parent.left
-        anchors.right: parent.right
         anchors.margins: Nheko.paddingMedium
-        spacing: Nheko.paddingMedium
-        z: 3
-
-        ImageButton {
-            id: backButton // Restore ID for layout reference compatibility
-            width: Nheko.avatarSize
-            height: Nheko.avatarSize
-            image: ":/icons/icons/ui/angle-arrow-left.svg"
-            ToolTip.visible: hovered
-            ToolTip.text: qsTr("Back")
-            onClicked: {
-                 if (isDirty) {
-                     confirmationDialog.open()
-                 } else {
-                     mainWindow.pop()
-                 }
-            }
-        }
-        
-        Label {
-            text: qsTr("User Settings")
-            Layout.fillWidth: true
-            horizontalAlignment: Qt.AlignHCenter
-            font.pointSize: fontMetrics.font.pointSize * 1.2
-            color: palette.text
-        }
-
-        Button {
-            text: qsTr("Save")
-            enabled: isDirty
-            onClicked: {
-                isDirty = false
-            }
-        }
+        width: Nheko.avatarSize
+        height: Nheko.avatarSize
+        image: ":/icons/icons/ui/angle-arrow-left.svg"
+        ToolTip.visible: hovered
+        ToolTip.text: qsTr("Back")
+        onClicked: mainWindow.pop()
     }
 }
 
