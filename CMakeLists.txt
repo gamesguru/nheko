@@ -246,7 +246,6 @@ endif()
 #
 # Discover Qt dependencies.
 #
-set(QT_NO_PRIVATE_MODULE_WARNING ON)
 find_package(Qt6 6.5 COMPONENTS Core Widgets Gui LinguistTools Svg Multimedia Qml QuickControls2 REQUIRED)
 if (Qt6Qml_VERSION VERSION_GREATER_EQUAL "6.10.0")
     find_package(Qt6 REQUIRED COMPONENTS GuiPrivate QmlPrivate)
@@ -299,8 +298,7 @@ if(NOT MSVC)
         -fsized-deallocation \
         -fdiagnostics-color=always \
         -Wunreachable-code \
-        -Wno-attributes \
-        -Wno-unused-parameter"
+        -Wno-attributes"
     )
     if(NOT CMAKE_COMPILER_IS_GNUCXX)
         # -Wshadow is buggy and broken in GCC, so do not enable it.
@@ -963,7 +961,7 @@ if(QML_DEBUGGING)
 endif()
 
 if(NOT MSVC AND NOT HAIKU)
-    if(CI_BUILD)
+    if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug" OR CI_BUILD)
         target_compile_options(nheko PRIVATE "-Werror")
     endif()
 endif()
