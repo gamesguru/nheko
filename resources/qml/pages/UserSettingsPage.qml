@@ -295,24 +295,29 @@ Rectangle {
 
     property bool isDirty: false
 
-    MessageDialog {
+    Dialog {
         id: confirmationDialog
         title: qsTr("Unsaved Changes")
-        text: qsTr("You have unsaved changes. Do you want to save them?")
-        buttons: MessageDialog.Save | MessageDialog.Discard | MessageDialog.Cancel
+        standardButtons: Dialog.Save | Dialog.Discard | Dialog.Cancel
+        anchors.centerIn: parent
+        modal: true
+        
+        Label {
+            text: qsTr("You have unsaved changes. Do you want to save them?")
+            color: palette.text
+        }
+        
         onAccepted: { // Save
             isDirty = false
             console.log("Settings saved (implicitly applied)")
             mainWindow.pop()
         }
         onDiscarded: { // Discard
-            // Note: Nheko applies changes immediately, so 'Discard' acts more like 'Close anyway'.
-            // Real reverting would require deep model snapshots.
             isDirty = false
             mainWindow.pop()
         }
         onRejected: { // Cancel
-            // Do nothing, stay on page
+            // Do nothing
         }
     }
 
@@ -328,6 +333,7 @@ Rectangle {
     }
 
     RowLayout {
+        id: headerLayout
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
@@ -336,6 +342,7 @@ Rectangle {
         z: 3
 
         ImageButton {
+            id: backButton // Restore ID for layout reference compatibility
             width: Nheko.avatarSize
             height: Nheko.avatarSize
             image: ":/icons/icons/ui/angle-arrow-left.svg"
