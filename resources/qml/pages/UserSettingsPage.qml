@@ -97,7 +97,7 @@ Rectangle {
                             roleValue: UserSettingsModel.Options
                             Item {
                                 anchors.right: parent.right
-                                height: child.height
+                                height: child.implicitHeight
                                 width: Math.min(child.implicitWidth, scroll.availableWidth - Nheko.paddingMedium)
 
                                 ComboBox {
@@ -105,24 +105,37 @@ Rectangle {
                                     anchors.fill: parent
                                     model: r.model.values
                                     currentIndex: r.model.value
-                                    onActivated: r.model.value = currentIndex
+                                    onActivated: {
+                                        r.model.value = currentIndex
+                                        userSettingsDialog.isDirty = true
+                                    }
                                     implicitContentWidthPolicy: ComboBox.WidestTextWhenCompleted
 
-                                    enabled: activeFocus
-                                    palette: Nheko.colors
-                                    opacity: 1
+                                    // Disable built-in wheel handling to prevent 'hover' capture
+                                    wheelEnabled: false
 
-                                    WheelHandler{} // suppress scrolling changing values
+                                    // Manual wheel handling only when focused
+                                    WheelHandler {
+                                        enabled: child.activeFocus
+                                        onWheel: (event)=> {
+                                            if (event.angleDelta.y > 0) child.decrementCurrentIndex();
+                                            else child.incrementCurrentIndex();
+                                        }
+                                    }
                                 }
-
+                                
+                                // Click to focus
                                 MouseArea {
                                     anchors.fill: parent
+                                    propagateComposedEvents: true
                                     enabled: !child.activeFocus
                                     onClicked: {
-                                        child.forceActiveFocus();
-                                        child.togglePopup();
+                                        child.forceActiveFocus()
+                                        child.togglePopup()
                                     }
-                                    cursorShape: Qt.PointingHandCursor
+                                    onWheel: (wheel)=> {
+                                        wheel.accepted = false
+                                    }
                                 }
                             }
                         }
@@ -280,18 +293,78 @@ Rectangle {
         }
     }
 
-    ImageButton {
-        id: backButton
-        anchors.top: parent.top
-        anchors.left: parent.left
-        anchors.margins: Nheko.paddingMedium
-        width: Nheko.avatarSize
-        height: Nheko.avatarSize
-        image: ":/icons/icons/ui/angle-arrow-left.svg"
-        ToolTip.visible: hovered
-        ToolTip.text: qsTr("Back")
-        onClicked: mainWindow.pop()
+    property bool isDirty: false
+
+    MessageDialog {
+        id: confirmationDialog
+        title: qsTr("Unsaved Changes")
+        text: qsTr("You have unsaved changes. Do you want to save them?")
+        buttons: MessageDialog.Save | MessageDialog.Discard | MessageDialog.Cancel
+        onAccepted: { // Save
+            isDirty = false
+            console.log("Settings saved (implicitly applied)")
+            mainWindow.pop()
+        }
+        onDiscarded: { // Discard
+            // Note: Nheko applies changes immediately, so 'Discard' acts more like 'Close anyway'.
+            // Real reverting would require deep model snapshots.
+            isDirty = false
+            mainWindow.pop()
+        }
+        onRejected: { // Cancel
+            // Do nothing, stay on page
+        }
     }
 
+    Shortcut {
+        sequence: StandardKey.Cancel
+        onActivated: {
+            if (isDirty) {
+               confirmationDialog.open()
+            } else {
+               mainWindow.pop()
+            }
+        }
+    }
+
+    RowLayout {
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.margins: Nheko.paddingMedium
+        spacing: Nheko.paddingMedium
+        z: 3
+
+        ImageButton {
+            width: Nheko.avatarSize
+            height: Nheko.avatarSize
+            image: ":/icons/icons/ui/angle-arrow-left.svg"
+            ToolTip.visible: hovered
+            ToolTip.text: qsTr("Back")
+            onClicked: {
+                 if (isDirty) {
+                     confirmationDialog.open()
+                 } else {
+                     mainWindow.pop()
+                 }
+            }
+        }
+        
+        Label {
+            text: qsTr("User Settings")
+            Layout.fillWidth: true
+            horizontalAlignment: Qt.AlignHCenter
+            font.pointSize: fontMetrics.font.pointSize * 1.2
+            color: palette.text
+        }
+
+        Button {
+            text: qsTr("Save")
+            enabled: isDirty
+            onClicked: {
+                isDirty = false
+            }
+        }
+    }
 }
 

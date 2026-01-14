@@ -304,8 +304,8 @@ ApplicationWindow {
                 }
 
                 Item {
-                    height: notificationsCombo.height
                     Layout.fillWidth: true
+                    height: notificationsCombo.implicitHeight
 
                     ComboBox {
                         id: notificationsCombo
@@ -314,23 +314,31 @@ ApplicationWindow {
                         currentIndex: roomSettings.notifications
                         onActivated: (index) => {
                             roomSettings.changeNotifications(index);
+                            roomSettingsDialog.isDirty = true;
                         }
-
-                        enabled: activeFocus
-                        palette: Nheko.colors
-                        opacity: 1
-
-                        WheelHandler{} // suppress scrolling changing values
+                        
+                        wheelEnabled: false
+                        
+                        WheelHandler {
+                            enabled: notificationsCombo.activeFocus
+                            onWheel: (event)=> {
+                                if (event.angleDelta.y > 0) notificationsCombo.decrementCurrentIndex();
+                                else notificationsCombo.incrementCurrentIndex();
+                            }
+                        }
                     }
 
                     MouseArea {
                         anchors.fill: parent
+                        propagateComposedEvents: true
                         enabled: !notificationsCombo.activeFocus
                         onClicked: {
-                            notificationsCombo.forceActiveFocus();
-                            notificationsCombo.togglePopup();
+                            notificationsCombo.forceActiveFocus()
+                            notificationsCombo.togglePopup()
                         }
-                        cursorShape: Qt.PointingHandCursor
+                        onWheel: (wheel)=> {
+                            wheel.accepted = false
+                        }
                     }
                 }
 
@@ -727,7 +735,17 @@ ApplicationWindow {
             console.log(flickable.visibleArea)
         }
     }
+    property bool isDirty: false
+
     footer: DialogButtonBox {
+        Button {
+            text: qsTr("Save")
+            DialogButtonBox.buttonRole: DialogButtonBox.ApplyRole
+            enabled: roomSettingsDialog.isDirty
+            onClicked: {
+                 roomSettingsDialog.isDirty = false
+            }
+        }
         standardButtons: DialogButtonBox.Ok
         onAccepted: close()
     }
