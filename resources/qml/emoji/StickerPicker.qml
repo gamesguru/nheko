@@ -19,7 +19,7 @@ Menu {
     property real highlightHue: palette.highlight.hslHue
     property real highlightSat: palette.highlight.hslSaturation
     property real highlightLight: palette.highlight.hslLightness
-    readonly property int stickerDim: emoji ? 48 : 128
+    readonly property int stickerDim: emoji ? (48 * Settings.emojiSize) : 128
     readonly property int stickerDimPad: stickerDim + Nheko.paddingSmall
     readonly property int stickersPerRow: emoji ? 7 : 3
     readonly property int sidebarAvatarSize: 24
@@ -184,7 +184,7 @@ Menu {
                                         horizontalAlignment: Text.AlignHCenter
                                         verticalAlignment: Text.AlignVCenter
                                         font.family: Settings.emojiFont != "" ? Settings.emojiFont : undefined
-                                        font.pixelSize: 36
+                                        font.pixelSize: 36 * Settings.emojiSize
                                         text: del.modelData.unicode.replace('\ufe0f', '')
                                     }
                                 }

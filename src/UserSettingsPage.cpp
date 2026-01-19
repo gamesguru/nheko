@@ -102,6 +102,7 @@ UserSettings::load(std::optional<QString> profile)
     mobileMode_             = settings.value("user/mobile_mode", false).toBool();
     disableSwipe_           = settings.value("user/disable_swipe", false).toBool();
     emojiFont_              = settings.value("user/emoji_font_family", "emoji").toString();
+    emojiSize_              = settings.value("user/emoji_pixel_size", 1.0).toDouble();
     baseFontSize_           = settings.value("user/font_size", QFont().pointSizeF()).toDouble();
     ringtone_               = settings.value("user/ringtone", "Default").toString();
     microphone_             = settings.value("user/microphone", QString()).toString();
@@ -624,6 +625,16 @@ UserSettings::setEmojiFontFamily(QString family)
 }
 
 void
+UserSettings::setEmojiSize(double size)
+{
+    if (size == emojiSize_)
+        return;
+    emojiSize_ = size;
+    emit emojiSizeChanged(size);
+    save();
+}
+
+void
 UserSettings::setPresence(Presence state)
 {
     if (state == presence_)
@@ -945,6 +956,7 @@ UserSettings::save()
     settings.setValue("theme", theme());
     settings.setValue("font_family", font_);
     settings.setValue("emoji_font_family", emojiFont_);
+    settings.setValue("emoji_pixel_size", emojiSize_);
     settings.setValue("ringtone", ringtone_);
     settings.setValue("microphone", microphone_);
     settings.setValue("camera", camera_);
@@ -1112,6 +1124,8 @@ UserSettingsModel::data(const QModelIndex &index, int role) const
             return tr("Font Family");
         case EmojiFont:
             return tr("Emoji Font Family");
+        case EmojiSize:
+            return tr("Emoji Size");
         case Ringtone:
             return tr("Ringtone");
         case Microphone:
@@ -1273,6 +1287,8 @@ UserSettingsModel::data(const QModelIndex &index, int role) const
             else
                 return data(index, Values).toStringList().indexOf(i->emojiFont());
         }
+        case EmojiSize:
+            return i->emojiSize();
         case Ringtone: {
             auto v = i->ringtone();
             if (v == QStringView(u"Mute"))
@@ -1338,6 +1354,7 @@ UserSettingsModel::data(const QModelIndex &index, int role) const
         case Theme:
         case Font:
         case EmojiFont:
+        case EmojiSize:
             return {};
         case Microphone:
             return tr("Set the notification sound to play when a call invite arrives");
@@ -1554,6 +1571,7 @@ UserSettingsModel::data(const QModelIndex &index, int role) const
             return Integer;
         case FontSize:
         case ScaleFactor:
+        case EmojiSize:
             return Double;
         case MessageHoverHighlight:
         case EnlargeEmojiOnlyMessages:
@@ -1639,6 +1657,8 @@ UserSettingsModel::data(const QModelIndex &index, int role) const
             return 8.0;
         case ScaleFactor:
             return 1.0;
+        case EmojiSize:
+            return 1.0;
         }
     } else if (role == ValueUpperBound) {
         switch (index.row()) {
@@ -1650,6 +1670,8 @@ UserSettingsModel::data(const QModelIndex &index, int role) const
             return 24.0;
         case ScaleFactor:
             return 3.0;
+        case EmojiSize:
+            return 5.0;
         }
     } else if (role == ValueStep) {
         switch (index.row()) {
@@ -1661,6 +1683,8 @@ UserSettingsModel::data(const QModelIndex &index, int role) const
             return 0.5;
         case ScaleFactor:
             return .25;
+        case EmojiSize:
+            return 0.2;
         }
     } else if (role == Values) {
         auto vecToList = [](const std::vector<std::string> &vec) {
@@ -2031,6 +2055,13 @@ UserSettingsModel::setData(const QModelIndex &index, const QVariant &value, int 
             } else
                 return false;
         }
+        case EmojiSize: {
+            if (value.canConvert(QMetaType::fromType<double>())) {
+                i->setEmojiSize(value.toDouble());
+                return true;
+            } else
+                return false;
+        }
         case Ringtone: {
             if (value.userType() == QMetaType::Int) {
                 int ringtone = value.toInt();
@@ -2277,6 +2308,9 @@ UserSettingsModel::UserSettingsModel(QObject *p)
     });
     connect(s.get(), &UserSettings::emojiFontChanged, this, [this]() {
         emit dataChanged(index(EmojiFont), index(EmojiFont), {Value});
+    });
+    connect(s.get(), &UserSettings::emojiSizeChanged, this, [this]() {
+        emit dataChanged(index(EmojiSize), index(EmojiSize), {Value});
     });
     connect(s.get(), &UserSettings::avatarCirclesChanged, this, [this]() {
         emit dataChanged(index(AvatarCircles), index(AvatarCircles), {Value});

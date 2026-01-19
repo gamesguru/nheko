@@ -74,6 +74,7 @@ class UserSettings final : public QObject
     Q_PROPERTY(double fontSize READ fontSize WRITE setFontSize NOTIFY fontSizeChanged)
     Q_PROPERTY(QString font READ font WRITE setFontFamily NOTIFY fontChanged)
     Q_PROPERTY(QString emojiFont READ emojiFont WRITE setEmojiFontFamily NOTIFY emojiFontChanged)
+    Q_PROPERTY(double emojiSize READ emojiSize WRITE setEmojiSize NOTIFY emojiSizeChanged)
     Q_PROPERTY(Presence presence READ presence WRITE setPresence NOTIFY presenceChanged)
     Q_PROPERTY(ShowImage showImage READ showImage WRITE setShowImage NOTIFY showImageChanged)
     Q_PROPERTY(QString ringtone READ ringtone WRITE setRingtone NOTIFY ringtoneChanged)
@@ -179,6 +180,7 @@ public:
     void setFontSize(double size);
     void setFontFamily(QString family);
     void setEmojiFontFamily(QString family);
+    void setEmojiSize(double size);
     void setGroupView(bool state);
     void setScrollbarsInRoomlist(bool state);
     void setMarkdown(bool state);
@@ -282,6 +284,7 @@ public:
 
         return emojiFont_;
     }
+    double emojiSize() const { return emojiSize_; }
     Presence presence() const { return presence_; }
     ShowImage showImage() const { return showImage_; }
     QString ringtone() const { return ringtone_; }
@@ -353,6 +356,7 @@ signals:
     void fontSizeChanged(double state);
     void fontChanged(QString state);
     void emojiFontChanged(QString state);
+    void emojiSizeChanged(double state);
     void presenceChanged(Presence state);
     void showImageChanged(ShowImage state);
     void ringtoneChanged(QString ringtone);
@@ -429,6 +433,7 @@ private:
     double baseFontSize_;
     QString font_;
     QString emojiFont_;
+    double emojiSize_;
     Presence presence_;
     ShowImage showImage_;
     QString ringtone_;
@@ -484,6 +489,7 @@ class UserSettingsModel : public QAbstractListModel
         Font,
         FontSize,
         EmojiFont,
+        EmojiSize,
         AvatarCircles,
         UseIdenticon,
         PrivacyScreen,

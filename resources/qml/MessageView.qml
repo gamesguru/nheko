@@ -209,6 +209,7 @@ Item {
                             anchors.centerIn: parent
                             color: button.hovered ? button.highlightColor : button.buttonTextColor
                             font.family: Settings.emojiFont != "" ? Settings.emojiFont : undefined
+                            font.pixelSize: fontMetrics.font.pixelSize * Settings.emojiSize
                             horizontalAlignment: Text.AlignHCenter
                             padding: 0
                             text: TimelineManager.htmlEscape(button.modelData)

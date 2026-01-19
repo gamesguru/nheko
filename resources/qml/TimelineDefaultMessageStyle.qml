@@ -345,7 +345,7 @@ TimelineEvent {
 
             anchors {
                 top: gridContainer.bottom
-                topMargin: -4
+                topMargin: 0
             }
         },
         Rectangle {
