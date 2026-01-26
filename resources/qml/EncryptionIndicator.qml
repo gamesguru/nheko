@@ -21,8 +21,9 @@ Image {
         case Crypto.TOFU:
             return "image://colorimage/:/icons/icons/ui/shield-filled.svg?";
         case Crypto.Unverified:
-        case Crypto.MessageUnverified:
             return "image://colorimage/:/icons/icons/ui/shield-filled-exclamation-mark.svg?";
+        case Crypto.MessageUnverified:
+            return Settings.mildKeyWarning ? "image://colorimage/:/icons/icons/ui/shield-filled-checkmark.svg?" : "image://colorimage/:/icons/icons/ui/shield-filled-exclamation-mark.svg?";
         default:
             return "image://colorimage/:/icons/icons/ui/shield-filled-cross.svg?";
         }
@@ -55,6 +56,9 @@ Image {
                 return sourceUrl + Nheko.theme.green;
             case Crypto.TOFU:
                 return sourceUrl + palette.buttonText;
+            case Crypto.Unverified:
+            case Crypto.MessageUnverified:
+                return sourceUrl + (Settings.mildKeyWarning ? Nheko.theme.orange : Nheko.theme.error);
             default:
                 return sourceUrl + Nheko.theme.error;
             }

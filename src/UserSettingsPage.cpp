@@ -98,6 +98,7 @@ UserSettings::load(std::optional<QString> profile)
     exposeDBusApi_        = settings.value("user/expose_dbus_api", false).toBool();
     updateSpaceVias_      = settings.value("user/space_background_maintenance", true).toBool();
     expireEvents_ = settings.value("user/expired_events_background_maintenance", false).toBool();
+    mildKeyWarning_ = settings.value("user/mild_key_warning", false).toBool();
 
     mobileMode_             = settings.value("user/mobile_mode", false).toBool();
     disableSwipe_           = settings.value("user/disable_swipe", false).toBool();
@@ -327,6 +328,17 @@ UserSettings::setExpireEvents(bool state)
 
     expireEvents_ = state;
     emit expireEventsChanged(state);
+    save();
+}
+
+void
+UserSettings::setMildKeyWarning(bool state)
+{
+    if (mildKeyWarning_ == state)
+        return;
+
+    mildKeyWarning_ = state;
+    emit mildKeyWarningChanged(state);
     save();
 }
 
@@ -974,6 +986,7 @@ UserSettings::save()
     settings.setValue("expose_dbus_api", exposeDBusApi_);
     settings.setValue("space_background_maintenance", updateSpaceVias_);
     settings.setValue("expired_events_background_maintenance", expireEvents_);
+    settings.setValue("mild_key_warning", mildKeyWarning_);
 
     settings.endGroup(); // user
 
@@ -1180,6 +1193,8 @@ UserSettingsModel::data(const QModelIndex &index, int role) const
             return tr("Rescan Audio/Video Devices");
         case EncryptionSection:
             return tr("ENCRYPTION");
+        case MildKeyWarning:
+            return tr("Show milder warning for restored key messages");
         case LoginInfoSection:
             return tr("INFO");
         case SessionKeys:
@@ -1312,6 +1327,8 @@ UserSettingsModel::data(const QModelIndex &index, int role) const
             return i->useStunServer();
         case OnlyShareKeysWithVerifiedUsers:
             return i->onlyShareKeysWithVerifiedUsers();
+        case MildKeyWarning:
+            return i->mildKeyWarning();
         case ShareKeysWithTrustedUsers:
             return i->shareKeysWithTrustedUsers();
         case UseOnlineKeyBackup:
@@ -1487,6 +1504,8 @@ UserSettingsModel::data(const QModelIndex &index, int role) const
         case OnlyShareKeysWithVerifiedUsers:
             return tr("Requires a user to be verified to send encrypted messages to them. This "
                       "improves safety but makes E2EE more tedious.");
+        case MildKeyWarning:
+            return tr("Warnings about keys being from an untrusted source (e.g. key backups) will be less apparent.");
         case ShareKeysWithTrustedUsers:
             return tr(
               "Automatically replies to key requests from other users if they are verified, "
@@ -1610,6 +1629,7 @@ UserSettingsModel::data(const QModelIndex &index, int role) const
         case SpaceNotifications:
         case FancyEffects:
         case ReducedMotion:
+        case MildKeyWarning:
             return Toggle;
         case Profile:
         case UserId:
@@ -2130,6 +2150,13 @@ UserSettingsModel::setData(const QModelIndex &index, const QVariant &value, int 
             } else
                 return false;
         }
+        case MildKeyWarning: {
+            if (value.userType() == QMetaType::Bool) {
+                i->setMildKeyWarning(value.toBool());
+                return true;
+            } else
+                return false;
+        }
         case ShareKeysWithTrustedUsers: {
             if (value.userType() == QMetaType::Bool) {
                 i->setShareKeysWithTrustedUsers(value.toBool());
@@ -2451,6 +2478,9 @@ UserSettingsModel::UserSettingsModel(QObject *p)
     });
     connect(s.get(), &UserSettings::expireEventsChanged, this, [this] {
         emit dataChanged(index(ExpireEvents), index(ExpireEvents), {Value});
+    });
+    connect(s.get(), &UserSettings::mildKeyWarningChanged, this, [this] {
+        emit dataChanged(index(MildKeyWarning), index(MildKeyWarning), {Value});
     });
 
     connect(&CallDevices::instance(), &CallDevices::devicesChanged, this, [this] {
