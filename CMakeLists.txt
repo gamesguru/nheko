@@ -460,6 +460,11 @@ set(SRC_FILES
     src/BlurhashProvider.h
     src/Cache.cpp
     src/Cache.h
+    src/storage/StorageBackend.h
+    src/storage/LMDBBackend.h
+    src/storage/LMDBBackend.cpp
+    src/storage/PostgresBackend.h
+    src/storage/PostgresBackend.cpp
     src/CacheCryptoStructs.cpp
     src/CacheCryptoStructs.h
     src/CacheStructs.h
@@ -689,6 +694,11 @@ set(NHEKO_DEPS
     ${SRC_FILES}
     ${QRC}
     ${META_FILES_TO_INCLUDE})
+
+if(USE_POSTGRESQL)
+    list(APPEND NHEKO_DEPS ${PostgreSQL_LIBRARIES})
+    include_directories(${PostgreSQL_INCLUDE_DIRS})
+endif()
 
 if(ASAN)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address,undefined")

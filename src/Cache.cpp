@@ -5,6 +5,11 @@
 #include "Cache.h"
 #include "Cache_p.h"
 
+#include "storage/LMDBBackend.h"
+#ifdef NHEKO_POSTGRES_SUPPORT
+#include "storage/PostgresBackend.h"
+#endif
+
 #include <stdexcept>
 #include <unordered_set>
 #include <variant>
@@ -106,26 +111,7 @@ bool needsCompact = false;
 using CachedReceipts = std::multimap<uint64_t, std::string, std::greater<uint64_t>>;
 using Receipts       = std::map<std::string, std::map<std::string, uint64_t>>;
 
-struct CacheDb
-{
-    lmdb::env env_ = nullptr;
-    lmdb::dbi syncState;
-    lmdb::dbi rooms;
-    lmdb::dbi spacesChildren, spacesParents;
-    lmdb::dbi invites;
-    lmdb::dbi readReceipts;
-    lmdb::dbi notifications;
-    lmdb::dbi presence;
-
-    lmdb::dbi inboundMegolmSessions;
-    lmdb::dbi outboundMegolmSessions;
-    lmdb::dbi megolmSessionsData;
-    lmdb::dbi olmSessions;
-
-    lmdb::dbi encryptedRooms_;
-
-    lmdb::dbi eventExpiryBgJob_;
-};
+// CacheDb moved to Cache_p.h
 
 Cache::~Cache() noexcept = default;
 
@@ -434,6 +420,15 @@ Cache::Cache(const QString &userId, QObject *parent)
       },
       Qt::QueuedConnection);
     setup();
+    
+    // Initialize storage backend
+    // TODO: Add logic to switch based on settings
+#ifdef NHEKO_POSTGRES_SUPPORT
+    // Only use Postgres if configured, for now default to LMDB
+    storage_backend_ = std::make_unique<LMDBBackend>(db.get());
+#else
+    storage_backend_ = std::make_unique<LMDBBackend>(db.get());
+#endif
 }
 
 static QString
@@ -2769,33 +2764,13 @@ Cache::savePresence(
 }
 
 RoomInfo
+RoomInfo
 Cache::singleRoomInfo(const std::string &room_id)
 {
-    auto txn = ro_txn(db->env_);
+    auto txn = storage_backend_->createTransaction();
 
-    try {
-        auto statesdb = getStatesDb(txn, room_id);
-
-        std::string_view data;
-
-        // Check if the room is joined.
-        if (db->rooms.get(txn, room_id, data)) {
-            try {
-                RoomInfo tmp     = nlohmann::json::parse(data).get<RoomInfo>();
-                tmp.member_count = getMembersDb(txn, room_id).size(txn);
-                tmp.join_rule    = getRoomJoinRule(txn, statesdb);
-                tmp.guest_access = getRoomGuestAccess(txn, statesdb);
-
-                return tmp;
-            } catch (const nlohmann::json::exception &e) {
-                nhlog::db()->warn("failed to parse room info: room_id ({}), {}: {}",
-                                  room_id,
-                                  std::string(data.data(), data.size()),
-                                  e.what());
-            }
-        }
-    } catch (const lmdb::error &e) {
-        nhlog::db()->warn("failed to read room info from db: room_id ({}), {}", room_id, e.what());
+    if (auto info = storage_backend_->getRoom(*txn, room_id)) {
+        return *info;
     }
 
     return RoomInfo();

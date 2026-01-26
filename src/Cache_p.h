@@ -28,7 +28,32 @@ class txn;
 class dbi;
 }
 
-struct CacheDb;
+#if __has_include(<lmdbxx/lmdb++.h>)
+#include <lmdbxx/lmdb++.h>
+#else
+#include <lmdb++.h>
+#endif
+
+struct CacheDb
+{
+    lmdb::env env_ = nullptr;
+    lmdb::dbi syncState;
+    lmdb::dbi rooms;
+    lmdb::dbi spacesChildren, spacesParents;
+    lmdb::dbi invites;
+    lmdb::dbi readReceipts;
+    lmdb::dbi notifications;
+    lmdb::dbi presence;
+
+    lmdb::dbi inboundMegolmSessions;
+    lmdb::dbi outboundMegolmSessions;
+    lmdb::dbi megolmSessionsData;
+    lmdb::dbi olmSessions;
+
+    lmdb::dbi encryptedRooms_;
+
+    lmdb::dbi eventExpiryBgJob_;
+};
 
 class Cache final : public QObject
 {
@@ -435,6 +460,7 @@ private:
     bool databaseReady_ = false;
 
     std::unique_ptr<CacheDb> db;
+    std::unique_ptr<StorageBackend> storage_backend_;
 };
 
 namespace cache {

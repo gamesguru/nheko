@@ -20,6 +20,7 @@
 
 #include "CacheCryptoStructs.h"
 #include "CacheStructs.h"
+#include "storage/StorageBackend.h"
 
 namespace mtx::responses {
 struct Notifications;
