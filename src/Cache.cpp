@@ -9,6 +9,7 @@
 #ifdef NHEKO_POSTGRES_SUPPORT
 #include "storage/PostgresBackend.h"
 #endif
+#include "storage/SQLiteBackend.h"
 
 #include <stdexcept>
 #include <unordered_set>
@@ -427,6 +428,9 @@ Cache::Cache(const QString &userId, QObject *parent)
 #ifdef NHEKO_POSTGRES_SUPPORT
     if (settings->databaseBackend() == UserSettings::DatabaseBackend::PostgreSQL) {
         storage_backend_ = std::make_unique<cache::PostgresBackend>(settings->postgresUrl().toStdString());
+    } else if (settings->databaseBackend() == UserSettings::DatabaseBackend::SQLite) {
+        storage_backend_ = std::make_unique<cache::SQLiteBackend>(
+            (QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/nheko.sqlite").toStdString());
     } else {
         storage_backend_ = std::make_unique<cache::LMDBBackend>(db.get());
     }
@@ -2197,6 +2201,14 @@ Cache::updateState(const std::string &room, const mtx::responses::StateEvents &s
          } catch (std::exception &e) {
              nhlog::db()->error("Failed to mirror room {} to Postgres: {}", room, e.what());
          }
+    } else if (UserSettings::instance()->databaseBackend() == UserSettings::DatabaseBackend::SQLite) {
+         try {
+             auto sqltxn = storage_backend_->createTransaction();
+             storage_backend_->saveRoom(*sqltxn, room, updatedInfo);
+             sqltxn->commit();
+         } catch (std::exception &e) {
+             nhlog::db()->error("Failed to mirror room {} to SQLite: {}", room, e.what());
+         }
     }
 
     updateSpaces(txn, {room}, {room});
@@ -2595,7 +2607,17 @@ try {
                      storage_backend_->saveRoom(*pgtxn, room.first, updatedInfo);
                      pgtxn->commit();
                  } catch (std::exception &e) {
+                     pgtxn->commit();
+                 } catch (std::exception &e) {
                      nhlog::db()->error("Failed to mirror room {} to Postgres: {}", room.first, e.what());
+                 }
+            } else if (UserSettings::instance()->databaseBackend() == UserSettings::DatabaseBackend::SQLite) {
+                 try {
+                     auto sqltxn = storage_backend_->createTransaction();
+                     storage_backend_->saveRoom(*sqltxn, room.first, updatedInfo);
+                     sqltxn->commit();
+                 } catch (std::exception &e) {
+                     nhlog::db()->error("Failed to mirror room {} to SQLite: {}", room.first, e.what());
                  }
             }
         }
@@ -4430,6 +4452,14 @@ Cache::isNotificationSent(const std::string &event_id)
 std::vector<std::string>
 Cache::getRoomIds(lmdb::txn &txn)
 {
+    auto cursor = lmdb::cursor::open(txn, db->rooms);
+
+    std::vector<std::string> rooms;
+
+    std::string_view room_id, _unused;
+    while (cursor.get(room_id, _unused, MDB_NEXT))
+        rooms.emplace_back(room_id);
+
     cursor.close();
 
     return rooms;

@@ -22,6 +22,7 @@
 #include "encryption/Olm.h"
 #include "ui/Theme.h"
 #include "voip/CallDevices.h"
+#include "Logging.h"
 
 #include "config/nheko.h"
 
@@ -1728,8 +1729,6 @@ UserSettingsModel::data(const QModelIndex &index, int role) const
         case PostgresUrl:
             return EditableText;
         }
-        }
-
     } else if (role == ValueLowerBound) {
         switch (index.row()) {
         case TimelineMaxWidth:
@@ -2024,12 +2023,7 @@ UserSettingsModel::setData(const QModelIndex &index, const QVariant &value, int 
             } else
                 return false;
         }
-        case ButtonsInTimeline:
-            return i->buttonsInTimeline();
-        case UsePostgres:
-            return (int)i->databaseBackend();
-        case PostgresUrl:
-            return i->postgresUrl();
+
         case TimelineMaxWidth: {
             if (value.canConvert(QMetaType::fromType<int>())) {
                 i->setTimelineMaxWidth(value.toInt());
@@ -2292,17 +2286,10 @@ UserSettingsModel::setData(const QModelIndex &index, const QVariant &value, int 
                 return true;
             } else
                 return false;
-        case ExpireEvents: {
-            if (value.userType() == QMetaType::Bool) {
-                i->setExpireEvents(value.toBool());
-                return true;
-            } else
-                return false;
         }
         case UsePostgres: {
-            // Options type returns int index
              auto idx = value.toInt();
-             if (idx >= 0 && idx <= 1) {
+             if (idx >= 0 && idx <= 2) { // 0=LMDB, 1=Postgres, 2=SQLite
                  i->setDatabaseBackend(static_cast<UserSettings::DatabaseBackend>(idx));
                  return true;
              }
@@ -2314,7 +2301,6 @@ UserSettingsModel::setData(const QModelIndex &index, const QVariant &value, int 
                 return true;
             } else
                 return false;
-        }
         }
     }
     return false;

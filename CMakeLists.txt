@@ -11,6 +11,7 @@ else()
 endif()
 option(FLATPAK "Set this only if Nheko is built as a flatpak" OFF)
 option(JSON_ImplicitConversions "Disable implicit conversions in nlohmann/json" ON)
+option(NHEKO_POSTGRES_SUPPORT "Enable PostgreSQL storage backend" OFF)
 
 set(
     CMAKE_TOOLCHAIN_FILE "${CMAKE_CURRENT_LIST_DIR}/toolchain.cmake"
@@ -463,8 +464,8 @@ set(SRC_FILES
     src/storage/StorageBackend.h
     src/storage/LMDBBackend.h
     src/storage/LMDBBackend.cpp
-    src/storage/PostgresBackend.h
-    src/storage/PostgresBackend.cpp
+    src/storage/SQLiteBackend.h
+    src/storage/SQLiteBackend.cpp
     src/CacheCryptoStructs.cpp
     src/CacheCryptoStructs.h
     src/CacheStructs.h
@@ -906,6 +907,16 @@ else()
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(blurhash REQUIRED IMPORTED_TARGET blurhash)
     target_link_libraries(nheko PRIVATE PkgConfig::blurhash)
+
+if(NHEKO_POSTGRES_SUPPORT)
+    find_package(PostgreSQL REQUIRED)
+    target_sources(nheko PRIVATE
+        src/storage/PostgresBackend.h
+        src/storage/PostgresBackend.cpp
+    )
+    target_link_libraries(nheko PRIVATE PostgreSQL::PostgreSQL)
+    target_compile_definitions(nheko PRIVATE NHEKO_POSTGRES_SUPPORT)
+endif()
 endif()
 
 # Fixup bundled keychain include dirs
@@ -915,6 +926,9 @@ endif()
 if(USE_BUNDLED_KDSINGLEAPPLICATION)
     target_include_directories(nheko PRIVATE ${kdsingleapplication_SOURCE_DIR} ${kdsingleapplication_BINARY_DIR})
 endif()
+
+find_package(SQLite3 REQUIRED)
+target_link_libraries(nheko PRIVATE SQLite::SQLite3)
 
 if(NOT JSON_ImplicitConversions)
     set_target_properties(nlohmann_json::nlohmann_json PROPERTIES

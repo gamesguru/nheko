@@ -176,6 +176,7 @@ public:
     {
         LMDB,
         PostgreSQL,
+        SQLite,
     };
     Q_ENUM(DatabaseBackend)
 
