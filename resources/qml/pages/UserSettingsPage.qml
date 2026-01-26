@@ -190,6 +190,22 @@ Rectangle {
                             }
                         }
                         DelegateChoice {
+                            roleValue: UserSettingsModel.EditableText
+                            TextField {
+                                text: model.value
+                                onEditingFinished: model.value = text
+                                selectByMouse: true
+                                color: palette.text
+                                topPadding: Nheko.paddingSmall
+                                bottomPadding: Nheko.paddingSmall
+                                background: Rectangle {
+                                    color: parent.activeFocus ? palette.highlight : palette.alternateBase
+                                    border.color: parent.activeFocus ? palette.highlight : palette.mid
+                                    radius: Nheko.paddingSmall / 2
+                                }
+                            }
+                        }
+                        DelegateChoice {
                             roleValue: UserSettingsModel.SectionTitle
                             Item {
                                 width: grid.width

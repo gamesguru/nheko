@@ -23,6 +23,10 @@ struct Messages;
 struct StateEvents;
 }
 
+namespace cache {
+class StorageBackend;
+}
+
 namespace lmdb {
 class txn;
 class dbi;
@@ -460,7 +464,7 @@ private:
     bool databaseReady_ = false;
 
     std::unique_ptr<CacheDb> db;
-    std::unique_ptr<StorageBackend> storage_backend_;
+    std::unique_ptr<cache::StorageBackend> storage_backend_;
 };
 
 namespace cache {

@@ -2,9 +2,11 @@
 #include "Cache_p.h"
 #include "Logging.h"
 
+#include <nlohmann/json.hpp>
+
 namespace cache {
 
-LMDBBackend::LMDBBackend(CacheDb* db) : db_(db) {
+LMDBBackend::LMDBBackend(::CacheDb* db) : db_(db) {
     nhlog::db()->debug("Initializing LMDBBackend with existing CacheDb");
 }
 
@@ -46,7 +48,24 @@ std::optional<RoomInfo> LMDBBackend::getRoom(StorageTransaction& txn, const std:
     std::string_view data;
     if (db_->rooms.get(lmdbTxn, roomId, data)) {
         try {
-            return nlohmann::json::parse(data).get<RoomInfo>();
+            auto info = nlohmann::json::parse(data).get<RoomInfo>();
+            
+            // Enrich with member count
+            // Note: We use MDB_CREATE to ensure it mimics Cache behavior, 
+            // though strictly for reading we might handle MDB_NOTFOUND.
+            // But Cache uses getMembersDb which uses MDB_CREATE.
+            try {
+                auto membersDb = lmdb::dbi::open(lmdbTxn, (roomId + "/members").c_str(), MDB_CREATE);
+                // LMDB++ wrapper for size() might be diff? 
+                // Cache.cpp uses .size(txn). calling mdb_stat.
+                MDB_stat stat;
+                lmdb::dbi_stat(lmdbTxn, membersDb, &stat);
+                info.member_count = stat.ms_entries;
+            } catch (...) {
+                // If failed to open members db, keep count as is (likely 0)
+            }
+            
+            return info;
         } catch (...) {
             return std::nullopt;
         }

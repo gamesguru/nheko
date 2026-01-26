@@ -420,14 +420,18 @@ Cache::Cache(const QString &userId, QObject *parent)
       },
       Qt::QueuedConnection);
     setup();
+
+    auto settings = UserSettings::instance();
     
     // Initialize storage backend
-    // TODO: Add logic to switch based on settings
 #ifdef NHEKO_POSTGRES_SUPPORT
-    // Only use Postgres if configured, for now default to LMDB
-    storage_backend_ = std::make_unique<LMDBBackend>(db.get());
+    if (settings->databaseBackend() == UserSettings::DatabaseBackend::PostgreSQL) {
+        storage_backend_ = std::make_unique<cache::PostgresBackend>(settings->postgresUrl().toStdString());
+    } else {
+        storage_backend_ = std::make_unique<cache::LMDBBackend>(db.get());
+    }
 #else
-    storage_backend_ = std::make_unique<LMDBBackend>(db.get());
+    storage_backend_ = std::make_unique<cache::LMDBBackend>(db.get());
 #endif
 }
 
@@ -2183,6 +2187,18 @@ Cache::updateState(const std::string &room, const mtx::responses::StateEvents &s
     updatedInfo.is_tombstoned = getRoomIsTombstoned(txn, statesdb);
 
     db->rooms.put(txn, room, nlohmann::json(updatedInfo).dump());
+    
+    // Mirror to Postgres if enabled
+    if (UserSettings::instance()->databaseBackend() == UserSettings::DatabaseBackend::PostgreSQL) {
+         try {
+             auto pgtxn = storage_backend_->createTransaction();
+             storage_backend_->saveRoom(*pgtxn, room, updatedInfo);
+             pgtxn->commit();
+         } catch (std::exception &e) {
+             nhlog::db()->error("Failed to mirror room {} to Postgres: {}", room, e.what());
+         }
+    }
+
     updateSpaces(txn, {room}, {room});
     txn.commit();
 }
@@ -2571,6 +2587,17 @@ try {
             // nhlog::db()->critical(
             //   "Writing out new room info:\n{}\n{}", originalRoomInfoDump, newRoomInfoDump);
             db->rooms.put(txn, room.first, newRoomInfoDump);
+
+            // Mirror to Postgres if enabled
+            if (UserSettings::instance()->databaseBackend() == UserSettings::DatabaseBackend::PostgreSQL) {
+                 try {
+                     auto pgtxn = storage_backend_->createTransaction();
+                     storage_backend_->saveRoom(*pgtxn, room.first, updatedInfo);
+                     pgtxn->commit();
+                 } catch (std::exception &e) {
+                     nhlog::db()->error("Failed to mirror room {} to Postgres: {}", room.first, e.what());
+                 }
+            }
         }
 
         for (const auto &e : room.second.ephemeral.events) {
@@ -2764,7 +2791,6 @@ Cache::savePresence(
 }
 
 RoomInfo
-RoomInfo
 Cache::singleRoomInfo(const std::string &room_id)
 {
     auto txn = storage_backend_->createTransaction();
@@ -2778,30 +2804,12 @@ Cache::singleRoomInfo(const std::string &room_id)
 void
 Cache::updateLastMessageTimestamp(const std::string &room_id, uint64_t ts)
 {
-    auto txn = lmdb::txn::begin(db->env_);
+    auto txn = storage_backend_->createTransaction();
 
-    try {
-        auto statesdb = getStatesDb(txn, room_id);
-
-        std::string_view data;
-
-        // Check if the room is joined.
-        if (db->rooms.get(txn, room_id, data)) {
-            try {
-                RoomInfo tmp                         = nlohmann::json::parse(data).get<RoomInfo>();
-                tmp.approximate_last_modification_ts = ts;
-                db->rooms.put(txn, room_id, nlohmann::json(tmp).dump());
-                txn.commit();
-                return;
-            } catch (const nlohmann::json::exception &e) {
-                nhlog::db()->warn("failed to parse room info: room_id ({}), {}: {}",
-                                  room_id,
-                                  std::string(data.data(), data.size()),
-                                  e.what());
-            }
-        }
-    } catch (const lmdb::error &e) {
-        nhlog::db()->warn("failed to read room info from db: room_id ({}), {}", room_id, e.what());
+    if (auto info = storage_backend_->getRoom(*txn, room_id)) {
+        info->approximate_last_modification_ts = ts;
+        storage_backend_->saveRoom(*txn, room_id, *info);
+        txn->commit();
     }
 }
 
@@ -2810,48 +2818,13 @@ Cache::getRoomInfo(const std::vector<std::string> &rooms)
 {
     std::map<QString, RoomInfo> room_info;
 
-    // TODO This should be read only.
-    auto txn = lmdb::txn::begin(db->env_);
+    auto txn = storage_backend_->createTransaction();
 
     for (const auto &room : rooms) {
-        std::string_view data;
-        auto statesdb = getStatesDb(txn, room);
-
-        // Check if the room is joined.
-        if (db->rooms.get(txn, room, data)) {
-            try {
-                RoomInfo tmp     = nlohmann::json::parse(data).get<RoomInfo>();
-                tmp.member_count = getMembersDb(txn, room).size(txn);
-                tmp.join_rule    = getRoomJoinRule(txn, statesdb);
-                tmp.guest_access = getRoomGuestAccess(txn, statesdb);
-
-                room_info.emplace(QString::fromStdString(room), std::move(tmp));
-            } catch (const nlohmann::json::exception &e) {
-                nhlog::db()->warn("failed to parse room info: room_id ({}), {}: {}",
-                                  room,
-                                  std::string(data.data(), data.size()),
-                                  e.what());
-            }
-        } else {
-            // Check if the room is an invite.
-            if (db->invites.get(txn, room, data)) {
-                try {
-                    RoomInfo tmp = nlohmann::json::parse(std::string_view(data)).get<RoomInfo>();
-                    tmp.member_count = getInviteMembersDb(txn, room).size(txn);
-
-                    room_info.emplace(QString::fromStdString(room), std::move(tmp));
-                } catch (const nlohmann::json::exception &e) {
-                    nhlog::db()->warn("failed to parse room info for invite: "
-                                      "room_id ({}), {}: {}",
-                                      room,
-                                      std::string(data.data(), data.size()),
-                                      e.what());
-                }
-            }
+        if (auto info = storage_backend_->getRoom(*txn, room)) {
+            room_info.emplace(QString::fromStdString(room), std::move(*info));
         }
     }
-
-    txn.commit();
 
     return room_info;
 }
@@ -2859,17 +2832,11 @@ Cache::getRoomInfo(const std::vector<std::string> &rooms)
 std::vector<QString>
 Cache::roomIds()
 {
-    auto txn = ro_txn(db->env_);
-
+    auto txn = storage_backend_->createTransaction();
     std::vector<QString> rooms;
-    std::string_view room_id, unused;
-
-    auto roomsCursor = lmdb::cursor::open(txn, db->rooms);
-    while (roomsCursor.get(room_id, unused, MDB_NEXT))
-        rooms.push_back(QString::fromStdString(std::string(room_id)));
-
-    roomsCursor.close();
-
+    for (const auto &room_id : storage_backend_->getRoomIds(*txn)) {
+        rooms.push_back(QString::fromStdString(room_id));
+    }
     return rooms;
 }
 
@@ -4463,14 +4430,6 @@ Cache::isNotificationSent(const std::string &event_id)
 std::vector<std::string>
 Cache::getRoomIds(lmdb::txn &txn)
 {
-    auto cursor = lmdb::cursor::open(txn, db->rooms);
-
-    std::vector<std::string> rooms;
-
-    std::string_view room_id, _unused;
-    while (cursor.get(room_id, _unused, MDB_NEXT))
-        rooms.emplace_back(room_id);
-
     cursor.close();
 
     return rooms;

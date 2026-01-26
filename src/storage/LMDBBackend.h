@@ -8,13 +8,13 @@
 #include <lmdb++.h>
 #endif
 
-namespace cache {
-
 struct CacheDb;
+
+namespace cache {
 
 class LMDBBackend : public StorageBackend {
 public:
-    LMDBBackend(CacheDb* db);
+    LMDBBackend(::CacheDb* db);
     ~LMDBBackend() override = default;
 
     std::unique_ptr<StorageTransaction> createTransaction() override;
@@ -27,7 +27,7 @@ public:
     lmdb::env& getEnv();
 
 private:
-   CacheDb* db_;
+   ::CacheDb* db_;
 };
 
 } // namespace cache

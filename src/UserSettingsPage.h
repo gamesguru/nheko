@@ -101,6 +101,8 @@ class UserSettings final : public QObject
     Q_PROPERTY(bool useOnlineKeyBackup READ useOnlineKeyBackup WRITE setUseOnlineKeyBackup NOTIFY
                  useOnlineKeyBackupChanged)
     Q_PROPERTY(QString profile READ profile WRITE setProfile NOTIFY profileChanged)
+    Q_PROPERTY(DatabaseBackend databaseBackend READ databaseBackend WRITE setDatabaseBackend NOTIFY databaseBackendChanged)
+    Q_PROPERTY(QString postgresUrl READ postgresUrl WRITE setPostgresUrl NOTIFY postgresUrlChanged)
     Q_PROPERTY(QString userId READ userId WRITE setUserId NOTIFY userIdChanged)
     Q_PROPERTY(QString accessToken READ accessToken WRITE setAccessToken NOTIFY accessTokenChanged)
     Q_PROPERTY(QString deviceId READ deviceId WRITE setDeviceId NOTIFY deviceIdChanged)
@@ -169,6 +171,13 @@ public:
         Never,
     };
     Q_ENUM(ShowImage)
+
+    enum class DatabaseBackend
+    {
+        LMDB,
+        PostgreSQL,
+    };
+    Q_ENUM(DatabaseBackend)
 
     void save();
     void load(std::optional<QString> profile);
@@ -245,6 +254,12 @@ public:
     void setExpireEvents(bool state);
     void setMildKeyWarning(bool state);
     void setLogLevel(QString level);
+
+    DatabaseBackend databaseBackend() const;
+    void setDatabaseBackend(DatabaseBackend value);
+
+    QString postgresUrl() const;
+    void setPostgresUrl(QString value);
 
     QString theme() const { return !theme_.isEmpty() ? theme_ : defaultTheme_; }
     bool messageHoverHighlight() const { return messageHoverHighlight_; }
@@ -396,6 +411,8 @@ signals:
     void expireEventsChanged(bool state);
     void mildKeyWarningChanged(bool state);
     void logLevelChanged(QString level);
+    void databaseBackendChanged();
+    void postgresUrlChanged();
 
 private:
     // Default to system theme if QT_QPA_PLATFORMTHEME var is set.
@@ -582,6 +599,11 @@ class UserSettingsModel : public QAbstractListModel
         Version,
         Platform,
         LogLevel,
+
+        StorageSection,
+        UsePostgres,
+        PostgresUrl,
+
         COUNT,
         // hidden for now
         AccessToken,
@@ -610,6 +632,7 @@ public:
         ManageIgnoredUsers,
         DeviceOptions,
         RescanDevs,
+        EditableText,
     };
     Q_ENUM(Types);
 

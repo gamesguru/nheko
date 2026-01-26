@@ -168,6 +168,28 @@ UserSettings::load(std::optional<QString> profile)
         setProfile(profile_);
 }
 
+UserSettings::DatabaseBackend
+UserSettings::databaseBackend() const
+{
+    // Migration: Check old boolean if new setting doesn't exist?
+    // For now, simpler to just read the string/int.
+    auto val = settings.value("database/backend", "LMDB").toString();
+    if (val == "PostgreSQL") return DatabaseBackend::PostgreSQL;
+    return DatabaseBackend::LMDB;
+}
+
+void
+UserSettings::setDatabaseBackend(DatabaseBackend value)
+{
+    QString val;
+    switch(value) {
+        case DatabaseBackend::PostgreSQL: val = "PostgreSQL"; break;
+        default: val = "LMDB"; break;
+    }
+    settings.setValue("database/backend", val);
+    emit databaseBackendChanged();
+}
+
 bool
 UserSettings::useIdenticon() const
 {
@@ -1597,6 +1619,12 @@ UserSettingsModel::data(const QModelIndex &index, int role) const
                       "to have one client running this regularly.");
         case IgnoredUsers:
             return tr("Manage your ignored users.");
+        case StorageSection:
+            return tr("Storage");
+        case UsePostgres:
+            return tr("Storage Backend");
+        case PostgresUrl:
+            return tr("Connection URL for PostgreSQL (e.g. postgresql://user:pass@localhost:5432/nheko)");
         }
     } else if (role == Type) {
         switch (index.row()) {
@@ -1693,7 +1721,15 @@ UserSettingsModel::data(const QModelIndex &index, int role) const
             return RescanDevs;
         case IgnoredUsers:
             return ManageIgnoredUsers;
+        case StorageSection:
+            return SectionTitle;
+        case UsePostgres:
+            return Options;
+        case PostgresUrl:
+            return EditableText;
         }
+        }
+
     } else if (role == ValueLowerBound) {
         switch (index.row()) {
         case TimelineMaxWidth:
@@ -1748,6 +1784,11 @@ UserSettingsModel::data(const QModelIndex &index, int role) const
               QStringLiteral("Dark"),
               QStringLiteral("System"),
             };
+        case UsePostgres:
+             return QStringList{
+                 QStringLiteral("LMDB"),
+                 QStringLiteral("PostgreSQL"),
+             };
         case LogLevel:
             return QStringList{
               QStringLiteral("trace"),
@@ -1983,6 +2024,12 @@ UserSettingsModel::setData(const QModelIndex &index, const QVariant &value, int 
             } else
                 return false;
         }
+        case ButtonsInTimeline:
+            return i->buttonsInTimeline();
+        case UsePostgres:
+            return (int)i->databaseBackend();
+        case PostgresUrl:
+            return i->postgresUrl();
         case TimelineMaxWidth: {
             if (value.canConvert(QMetaType::fromType<int>())) {
                 i->setTimelineMaxWidth(value.toInt());
@@ -2242,6 +2289,28 @@ UserSettingsModel::setData(const QModelIndex &index, const QVariant &value, int 
         case ExpireEvents: {
             if (value.userType() == QMetaType::Bool) {
                 i->setExpireEvents(value.toBool());
+                return true;
+            } else
+                return false;
+        case ExpireEvents: {
+            if (value.userType() == QMetaType::Bool) {
+                i->setExpireEvents(value.toBool());
+                return true;
+            } else
+                return false;
+        }
+        case UsePostgres: {
+            // Options type returns int index
+             auto idx = value.toInt();
+             if (idx >= 0 && idx <= 1) {
+                 i->setDatabaseBackend(static_cast<UserSettings::DatabaseBackend>(idx));
+                 return true;
+             }
+             return false;
+        }
+        case PostgresUrl: {
+             if (value.userType() == QMetaType::QString) {
+                i->setPostgresUrl(value.toString());
                 return true;
             } else
                 return false;

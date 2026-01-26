@@ -9,7 +9,7 @@
 #include <QString>
 
 #include "CacheStructs.h"
-#include <mtx/events/events.hpp>
+#include <mtx/events.hpp>
 #include <mtx/responses/sync.hpp>
 
 // Forward declarations
