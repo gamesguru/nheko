@@ -623,6 +623,8 @@ if(USE_BUNDLED_MTXCLIENT)
         MatrixClient
             GIT_REPOSITORY https://github.com/Nheko-Reborn/mtxclient.git
             GIT_TAG        v0.10.1
+            PATCH_COMMAND  git apply ${CMAKE_CURRENT_SOURCE_DIR}/third_party/mtxclient-patches/0001-silence-false-positive-errors.patch
+            UPDATE_DISCONNECTED 1
     )
     set(BUILD_LIB_EXAMPLES OFF CACHE INTERNAL "")
     set(BUILD_LIB_TESTS OFF CACHE INTERNAL "")

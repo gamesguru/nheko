@@ -1,0 +1,13 @@
+diff --git a/lib/structs/events/collections.cpp b/lib/structs/events/collections.cpp
+index 1234567..89abcdef 100644
+--- a/lib/structs/events/collections.cpp
++++ b/lib/structs/events/collections.cpp
+@@ -415,7 +415,8 @@ from_json(const nlohmann::json &obj, TimelineEvents &e)
+         }
+     } catch (std::exception &err) {
+-        mtx::utils::log::log()->error("Invalid event type: {} {}", err.what(), obj.dump(2));
++        if (!obj.contains("errcode"))
++            mtx::utils::log::log()->error("Invalid event type: {} {}", err.what(), obj.dump(2));
+         e = events::RoomEvent<events::Unknown>(obj);
+     }
+ }
