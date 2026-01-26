@@ -25,7 +25,7 @@ ApplicationWindow {
     flags: Qt.Dialog | Qt.WindowCloseButtonHint | Qt.WindowTitleHint
 
     Shortcut {
-        sequences: [StandardKey.Cancel]
+        sequence: StandardKey.Cancel
         onActivated: roomMembersRoot.close()
     }
 
