@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import QtQuick 2.15
+import Qt.labs.platform 1.1 as P
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.2
 import QtQuick.Window 2.15
@@ -412,6 +413,22 @@ Pane {
 
         onActivated: searchButton.searchActive = !searchButton.searchActive
     }
+    Shortcut {
+        sequences: [StandardKey.Cancel]
+        enabled: searchButton.searchActive
+        onActivated: closeSearchDialog.open()
+    }
+
+    P.MessageDialog {
+        id: closeSearchDialog
+        title: qsTr("Close Search")
+        text: qsTr("Are you sure you want to leave the search results and go back to the main chat messages?")
+        modality: Qt.WindowModal
+        flags: Qt.Dialog | Qt.WindowCloseButtonHint | Qt.WindowTitleHint
+        buttons: P.MessageDialog.Ok | P.MessageDialog.Cancel
+        onOkClicked: searchButton.searchActive = false
+    }
+
     TapHandler {
         gesturePolicy: TapHandler.ReleaseWithinBounds
 
