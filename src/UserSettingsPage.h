@@ -112,6 +112,7 @@ class UserSettings final : public QObject
                  openImageExternalChanged)
     Q_PROPERTY(bool openVideoExternal READ openVideoExternal WRITE setOpenVideoExternal NOTIFY
                  openVideoExternalChanged)
+    Q_PROPERTY(QString logLevel READ logLevel WRITE setLogLevel NOTIFY logLevelChanged)
 
     Q_PROPERTY(QStringList hiddenPins READ hiddenPins WRITE setHiddenPins NOTIFY hiddenPinsChanged)
     Q_PROPERTY(QStringList recentReactions READ recentReactions WRITE setRecentReactions NOTIFY
@@ -243,6 +244,7 @@ public:
     void setUpdateSpaceVias(bool state);
     void setExpireEvents(bool state);
     void setMildKeyWarning(bool state);
+    void setLogLevel(QString level);
 
     QString theme() const { return !theme_.isEmpty() ? theme_ : defaultTheme_; }
     bool messageHoverHighlight() const { return messageHoverHighlight_; }
@@ -323,6 +325,7 @@ public:
     bool updateSpaceVias() const { return updateSpaceVias_; }
     bool expireEvents() const { return expireEvents_; }
     bool mildKeyWarning() const { return mildKeyWarning_; }
+    QString logLevel() const { return logLevel_; }
 
 signals:
     void groupViewStateChanged(bool state);
@@ -392,6 +395,7 @@ signals:
     void updateSpaceViasChanged(bool state);
     void expireEventsChanged(bool state);
     void mildKeyWarningChanged(bool state);
+    void logLevelChanged(QString level);
 
 private:
     // Default to system theme if QT_QPA_PLATFORMTHEME var is set.
@@ -471,6 +475,7 @@ private:
     bool updateSpaceVias_;
     bool expireEvents_;
     bool mildKeyWarning_;
+    QString logLevel_;
 
     QSettings settings;
 
@@ -576,6 +581,7 @@ class UserSettingsModel : public QAbstractListModel
         Profile,
         Version,
         Platform,
+        LogLevel,
         COUNT,
         // hidden for now
         AccessToken,

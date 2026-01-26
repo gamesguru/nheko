@@ -106,6 +106,24 @@ init(const QString &level, const QString &path, bool to_stderr)
     qInstallMessageHandler(qmlMessageHandler);
 }
 
+void
+set_level(const QString &level)
+{
+    if (level.isEmpty())
+        return;
+
+    auto lvl = spdlog::level::from_str(level.toStdString());
+    db_logger->set_level(lvl);
+    ui_logger->set_level(lvl);
+    crypto_logger->set_level(lvl);
+    net_logger->set_level(lvl);
+    qml_logger->set_level(lvl);
+    mtx::utils::log::log()->set_level(lvl);
+
+    // Also update the spdlog global level just in case
+    spdlog::set_level(lvl);
+}
+
 std::shared_ptr<spdlog::logger>
 ui()
 {

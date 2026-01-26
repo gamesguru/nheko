@@ -14,6 +14,9 @@ namespace nhlog {
 void
 init(const QString &level, const QString &path, bool to_stderr);
 
+void
+set_level(const QString &level);
+
 std::shared_ptr<spdlog::logger>
 ui();
 

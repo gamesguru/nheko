@@ -88,6 +88,7 @@ UserSettings::load(std::optional<QString> profile)
     useIdenticon_         = settings.value("user/use_identicon", true).toBool();
     openImageExternal_    = settings.value("user/open_image_external", false).toBool();
     openVideoExternal_    = settings.value("user/open_video_external", false).toBool();
+    logLevel_             = settings.value(QStringLiteral("user/log_level"), "").toString();
     decryptSidebar_       = settings.value("user/decrypt_sidebar", true).toBool();
     decryptNotifications_ = settings.value("user/decrypt_notifications", true).toBool();
     spaceNotifications_   = settings.value("user/space_notifications", true).toBool();
@@ -265,6 +266,15 @@ UserSettings::setMutedTags(const QStringList &mutedTags)
 {
     mutedTags_ = mutedTags;
     save();
+}
+
+void
+UserSettings::setLogLevel(QString level)
+{
+    logLevel_ = level;
+    settings.setValue(QStringLiteral("user/log_level"), logLevel_);
+    nhlog::set_level(logLevel_);
+    emit logLevelChanged(logLevel_);
 }
 
 void
@@ -1173,6 +1183,8 @@ UserSettingsModel::data(const QModelIndex &index, int role) const
             return tr("Version");
         case Platform:
             return tr("Platform");
+        case LogLevel:
+            return tr("Log Level");
         case GeneralSection:
             return tr("GENERAL");
         case AccessibilitySection:
@@ -1349,6 +1361,18 @@ UserSettingsModel::data(const QModelIndex &index, int role) const
             return QString::fromStdString(nheko::version);
         case Platform:
             return QString::fromStdString(nheko::build_os);
+        case LogLevel: {
+             QStringList l{
+              QStringLiteral("trace"),
+              QStringLiteral("debug"),
+              QStringLiteral("info"),
+              QStringLiteral("warning"),
+              QStringLiteral("error"),
+              QStringLiteral("critical"),
+              QStringLiteral("off"),
+            };
+            return l.indexOf(i->logLevel());
+        }
         case OnlineBackupKey:
             return cache::secret(mtx::secret_storage::secrets::megolm_backup_v1).has_value();
         case SelfSigningKey:
@@ -1373,6 +1397,8 @@ UserSettingsModel::data(const QModelIndex &index, int role) const
         case EmojiFont:
         case EmojiSize:
             return {};
+        case LogLevel:
+            return tr("Change the verbosity of logs. Requires a restart to take full effect.");
         case Microphone:
             return tr("Set the notification sound to play when a call invite arrives");
         case Camera:
@@ -1584,6 +1610,7 @@ UserSettingsModel::data(const QModelIndex &index, int role) const
             return DeviceOptions;
         case Ringtone:
         case ShowImage:
+        case LogLevel:
             return Options;
         case TimelineMaxWidth:
         case PrivacyScreenTimeout:
@@ -1721,6 +1748,16 @@ UserSettingsModel::data(const QModelIndex &index, int role) const
               QStringLiteral("Dark"),
               QStringLiteral("System"),
             };
+        case LogLevel:
+            return QStringList{
+              QStringLiteral("trace"),
+              QStringLiteral("debug"),
+              QStringLiteral("info"),
+              QStringLiteral("warning"),
+              QStringLiteral("error"),
+              QStringLiteral("critical"),
+              QStringLiteral("off"),
+            };
         case ShowImage:
             return QStringList{
               tr("Always"),
@@ -1816,6 +1853,23 @@ UserSettingsModel::setData(const QModelIndex &index, const QVariant &value, int 
 
             i->setShowImage(static_cast<UserSettings::ShowImage>(showImageValue));
             return true;
+        }
+        case LogLevel: {
+            auto idx = value.toInt();
+            QStringList l{
+              QStringLiteral("trace"),
+              QStringLiteral("debug"),
+              QStringLiteral("info"),
+              QStringLiteral("warning"),
+              QStringLiteral("error"),
+              QStringLiteral("critical"),
+              QStringLiteral("off"),
+            };
+            if (idx >= 0 && idx < l.size()) {
+                i->setLogLevel(l[idx]);
+                return true;
+            } else
+                return false;
         }
         case MessageHoverHighlight: {
             if (value.userType() == QMetaType::Bool) {
