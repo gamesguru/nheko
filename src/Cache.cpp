@@ -431,17 +431,17 @@ Cache::Cache(const QString &userId, QObject *parent)
 
 #ifdef NHEKO_POSTGRES_SUPPORT
     if (settings->databaseBackend() == UserSettings::DatabaseBackend::PostgreSQL) {
+        nhlog::db()->info("Using v2 storage with Postgres backend at: {}", settings->postgresUrl().toStdString());
         storage_backend_ = std::make_unique<cache::PostgresBackend>(settings->postgresUrl().toStdString());
-    } else 
+    } else
 #endif
-    if (settings->databaseBackend() == UserSettings::DatabaseBackend::SQLite) {
-        storage_backend_ = std::make_unique<cache::SQLiteBackend>(
-            (QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/nheko.sqlite").toStdString());
-    } else {
-        if (settings->databaseBackend() == UserSettings::DatabaseBackend::PostgreSQL)
-             nhlog::db()->warn("Postgres selected but not compiled in. Falling back to LMDB.");
-        
+    if (settings->databaseBackend() == UserSettings::DatabaseBackend::LMDB) {
+        nhlog::db()->info("Using v1 storage with LMDB backend");
         storage_backend_ = std::make_unique<cache::LMDBBackend>(db.get());
+    } else {
+        auto sqlitePath = (QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/nheko.sqlite").toStdString();
+        nhlog::db()->info("Using v2 storage with SQLite backend at: {}", sqlitePath);
+        storage_backend_ = std::make_unique<cache::SQLiteBackend>(sqlitePath);
     }
 }
 
@@ -2469,9 +2469,16 @@ try {
 
     nhlog::db()->debug("Saving joined rooms: {}", res.rooms.join.size());
 
-
-
-
+    // Create a single SQL transaction for all room mirroring (if using SQL backend)
+    std::unique_ptr<cache::StorageTransaction> sqlTxn;
+    if (UserSettings::instance()->databaseBackend() != UserSettings::DatabaseBackend::LMDB) {
+        nhlog::db()->debug("Creating batched SQL transaction for mirroring");
+        try {
+            sqlTxn = storage_backend_->createTransaction();
+        } catch (std::exception &e) {
+            nhlog::db()->error("Failed to create SQL transaction: {}", e.what());
+        }
+    }
 
     // Save joined rooms
     for (const auto &room : res.rooms.join) {
@@ -2619,16 +2626,10 @@ try {
             db->rooms.put(txn, room.first, newRoomInfoDump);
 
             // Mirror to SQL backend if enabled
-            if (UserSettings::instance()->databaseBackend() != UserSettings::DatabaseBackend::LMDB) {
+            if (sqlTxn) {
                  nhlog::db()->debug("Mirroring room {} to SQL backend", room.first);
                  try {
-                     nhlog::db()->debug("Creating SQL transaction for mirroring");
-                     auto sqlTxn = storage_backend_->createTransaction();
-                     nhlog::db()->debug("SQL transaction created, saving room");
                      storage_backend_->saveRoom(*sqlTxn, room.first, updatedInfo);
-                     nhlog::db()->debug("Room saved, committing SQL transaction");
-                     sqlTxn->commit();
-                     nhlog::db()->debug("SQL transaction committed");
                  } catch (std::exception &e) {
                      nhlog::db()->error("Failed to mirror room {} to storage backend: {}", room.first, e.what());
                  }
@@ -2705,6 +2706,18 @@ try {
     }
 
     emit roomReadStatus(readStatus);
+
+    // Commit the batched SQL transaction
+    if (sqlTxn) {
+        nhlog::db()->debug("Committing batched SQL transaction");
+        try {
+            sqlTxn->commit();
+            nhlog::db()->debug("Batched SQL transaction committed");
+        } catch (std::exception &e) {
+            nhlog::db()->error("Failed to commit SQL transaction: {}", e.what());
+        }
+    }
+
     nhlog::db()->debug("saveState finished successfully");
 } catch (const lmdb::error &lmdbException) {
     if (lmdbException.code() == MDB_DBS_FULL || lmdbException.code() == MDB_MAP_FULL) {
