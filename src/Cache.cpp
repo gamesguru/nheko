@@ -178,7 +178,13 @@ Cache::getEventsDb(lmdb::txn &txn, const std::string &room_id)
     } catch (lmdb::error &e) {
         if (e.code() != MDB_NOTFOUND)
             throw;
-        return lmdb::dbi::open(txn, std::string(room_id + "/events").c_str(), MDB_CREATE);
+        try {
+            return lmdb::dbi::open(txn, std::string(room_id + "/events").c_str(), MDB_CREATE);
+        } catch (lmdb::error &e2) {
+            if (e2.code() == EACCES)
+                throw e;
+            throw;
+        }
     }
 }
 
@@ -190,8 +196,14 @@ Cache::getEventOrderDb(lmdb::txn &txn, const std::string &room_id)
     } catch (lmdb::error &e) {
         if (e.code() != MDB_NOTFOUND)
             throw;
-        return lmdb::dbi::open(
-          txn, std::string(room_id + "/event_order").c_str(), MDB_CREATE | MDB_INTEGERKEY);
+        try {
+            return lmdb::dbi::open(
+              txn, std::string(room_id + "/event_order").c_str(), MDB_CREATE | MDB_INTEGERKEY);
+        } catch (lmdb::error &e2) {
+            if (e2.code() == EACCES)
+                throw e;
+            throw;
+        }
     }
 }
 
@@ -204,7 +216,13 @@ Cache::getEventToOrderDb(lmdb::txn &txn, const std::string &room_id)
     } catch (lmdb::error &e) {
         if (e.code() != MDB_NOTFOUND)
             throw;
-        return lmdb::dbi::open(txn, std::string(room_id + "/event2order").c_str(), MDB_CREATE);
+        try {
+            return lmdb::dbi::open(txn, std::string(room_id + "/event2order").c_str(), MDB_CREATE);
+        } catch (lmdb::error &e2) {
+            if (e2.code() == EACCES)
+                throw e;
+            throw;
+        }
     }
 }
 
@@ -216,7 +234,13 @@ Cache::getMessageToOrderDb(lmdb::txn &txn, const std::string &room_id)
     } catch (lmdb::error &e) {
         if (e.code() != MDB_NOTFOUND)
             throw;
-        return lmdb::dbi::open(txn, std::string(room_id + "/msg2order").c_str(), MDB_CREATE);
+        try {
+            return lmdb::dbi::open(txn, std::string(room_id + "/msg2order").c_str(), MDB_CREATE);
+        } catch (lmdb::error &e2) {
+            if (e2.code() == EACCES)
+                throw e;
+            throw;
+        }
     }
 }
 
@@ -228,8 +252,14 @@ Cache::getOrderToMessageDb(lmdb::txn &txn, const std::string &room_id)
     } catch (lmdb::error &e) {
         if (e.code() != MDB_NOTFOUND)
             throw;
-        return lmdb::dbi::open(
-          txn, std::string(room_id + "/order2msg").c_str(), MDB_CREATE | MDB_INTEGERKEY);
+        try {
+            return lmdb::dbi::open(
+              txn, std::string(room_id + "/order2msg").c_str(), MDB_CREATE | MDB_INTEGERKEY);
+        } catch (lmdb::error &e2) {
+            if (e2.code() == EACCES)
+                throw e;
+            throw;
+        }
     }
 }
 
@@ -241,8 +271,14 @@ Cache::getPendingMessagesDb(lmdb::txn &txn, const std::string &room_id)
     } catch (lmdb::error &e) {
         if (e.code() != MDB_NOTFOUND)
             throw;
-        return lmdb::dbi::open(
-          txn, std::string(room_id + "/pending").c_str(), MDB_CREATE | MDB_INTEGERKEY);
+        try {
+            return lmdb::dbi::open(
+              txn, std::string(room_id + "/pending").c_str(), MDB_CREATE | MDB_INTEGERKEY);
+        } catch (lmdb::error &e2) {
+            if (e2.code() == EACCES)
+                throw e;
+            throw;
+        }
     }
 }
 
@@ -254,8 +290,14 @@ Cache::getRelationsDb(lmdb::txn &txn, const std::string &room_id)
     } catch (lmdb::error &e) {
         if (e.code() != MDB_NOTFOUND)
             throw;
-        return lmdb::dbi::open(
-          txn, std::string(room_id + "/related").c_str(), MDB_CREATE | MDB_DUPSORT);
+        try {
+            return lmdb::dbi::open(
+              txn, std::string(room_id + "/related").c_str(), MDB_CREATE | MDB_DUPSORT);
+        } catch (lmdb::error &e2) {
+            if (e2.code() == EACCES)
+                throw e;
+            throw;
+        }
     }
 }
 
@@ -267,7 +309,13 @@ Cache::getInviteStatesDb(lmdb::txn &txn, const std::string &room_id)
     } catch (lmdb::error &e) {
         if (e.code() != MDB_NOTFOUND)
             throw;
-        return lmdb::dbi::open(txn, std::string(room_id + "/invite_state").c_str(), MDB_CREATE);
+        try {
+            return lmdb::dbi::open(txn, std::string(room_id + "/invite_state").c_str(), MDB_CREATE);
+        } catch (lmdb::error &e2) {
+            if (e2.code() == EACCES)
+                throw e;
+            throw;
+        }
     }
 }
 
@@ -279,7 +327,13 @@ Cache::getInviteMembersDb(lmdb::txn &txn, const std::string &room_id)
     } catch (lmdb::error &e) {
         if (e.code() != MDB_NOTFOUND)
             throw;
-        return lmdb::dbi::open(txn, std::string(room_id + "/invite_members").c_str(), MDB_CREATE);
+        try {
+            return lmdb::dbi::open(txn, std::string(room_id + "/invite_members").c_str(), MDB_CREATE);
+        } catch (lmdb::error &e2) {
+            if (e2.code() == EACCES)
+                throw e;
+            throw;
+        }
     }
 }
 
@@ -291,7 +345,13 @@ Cache::getStatesDb(lmdb::txn &txn, const std::string &room_id)
     } catch (lmdb::error &e) {
         if (e.code() != MDB_NOTFOUND)
             throw;
-        return lmdb::dbi::open(txn, std::string(room_id + "/state").c_str(), MDB_CREATE);
+        try {
+            return lmdb::dbi::open(txn, std::string(room_id + "/state").c_str(), MDB_CREATE);
+        } catch (lmdb::error &e2) {
+            if (e2.code() == EACCES)
+                throw e;
+            throw;
+        }
     }
 }
 
@@ -321,10 +381,16 @@ Cache::getStatesKeyDb(lmdb::txn &txn, const std::string &room_id)
     } catch (lmdb::error &e) {
         if (e.code() != MDB_NOTFOUND)
             throw;
-        auto db_ = lmdb::dbi::open(
-          txn, std::string(room_id + "/states_key").c_str(), MDB_CREATE | MDB_DUPSORT);
-        lmdb::dbi_set_dupsort(txn, db_, compare_state_key);
-        return db_;
+        try {
+            auto db_ = lmdb::dbi::open(
+              txn, std::string(room_id + "/states_key").c_str(), MDB_CREATE | MDB_DUPSORT);
+            lmdb::dbi_set_dupsort(txn, db_, compare_state_key);
+            return db_;
+        } catch (lmdb::error &e2) {
+            if (e2.code() == EACCES)
+                throw e;
+            throw;
+        }
     }
 }
 
@@ -336,7 +402,13 @@ Cache::getAccountDataDb(lmdb::txn &txn, const std::string &room_id)
     } catch (lmdb::error &e) {
         if (e.code() != MDB_NOTFOUND)
             throw;
-        return lmdb::dbi::open(txn, std::string(room_id + "/account_data").c_str(), MDB_CREATE);
+        try {
+            return lmdb::dbi::open(txn, std::string(room_id + "/account_data").c_str(), MDB_CREATE);
+        } catch (lmdb::error &e2) {
+            if (e2.code() == EACCES)
+                throw e;
+            throw;
+        }
     }
 }
 
@@ -348,7 +420,13 @@ Cache::getMembersDb(lmdb::txn &txn, const std::string &room_id)
     } catch (lmdb::error &e) {
         if (e.code() != MDB_NOTFOUND)
             throw;
-        return lmdb::dbi::open(txn, std::string(room_id + "/members").c_str(), MDB_CREATE);
+        try {
+            return lmdb::dbi::open(txn, std::string(room_id + "/members").c_str(), MDB_CREATE);
+        } catch (lmdb::error &e2) {
+            if (e2.code() == EACCES)
+                throw e;
+            throw;
+        }
     }
 }
 
@@ -360,7 +438,13 @@ Cache::getUserKeysDb(lmdb::txn &txn)
     } catch (lmdb::error &e) {
         if (e.code() != MDB_NOTFOUND)
             throw;
-        return lmdb::dbi::open(txn, "user_key", MDB_CREATE);
+        try {
+            return lmdb::dbi::open(txn, "user_key", MDB_CREATE);
+        } catch (lmdb::error &e2) {
+            if (e2.code() == EACCES)
+                throw e;
+            throw;
+        }
     }
 }
 
@@ -372,7 +456,13 @@ Cache::getVerificationDb(lmdb::txn &txn)
     } catch (lmdb::error &e) {
         if (e.code() != MDB_NOTFOUND)
             throw;
-        return lmdb::dbi::open(txn, "verified", MDB_CREATE);
+        try {
+            return lmdb::dbi::open(txn, "verified", MDB_CREATE);
+        } catch (lmdb::error &e2) {
+            if (e2.code() == EACCES)
+                throw e;
+            throw;
+        }
     }
 }
 
@@ -1539,7 +1629,13 @@ Cache::restoreOlmAccount()
     auto txn = ro_txn(db->env_);
 
     std::string_view pickled;
-    db->syncState.get(txn, OLM_ACCOUNT_KEY, pickled);
+    try {
+        db->syncState.get(txn, OLM_ACCOUNT_KEY, pickled);
+    } catch (const lmdb::error &e) {
+        if (e.code() != MDB_NOTFOUND)
+            throw;
+        return "";
+    }
 
     return std::string(pickled.data(), pickled.size());
 }
@@ -1603,7 +1699,7 @@ void
 Cache::removeRoom(const std::string &roomid)
 {
     auto txn = lmdb::txn::begin(db->env_, nullptr, 0);
-    db->rooms.del(txn, roomid);
+    removeRoom(txn, roomid);
     txn.commit();
 }
 
@@ -3212,7 +3308,7 @@ Cache::getLastEventId(lmdb::txn &txn, const std::string &room_id)
     lmdb::dbi orderDb;
     try {
         orderDb = getOrderToMessageDb(txn, room_id);
-    } catch (lmdb::runtime_error &e) {
+    } catch (lmdb::error &e) {
         nhlog::db()->error(
           "Can't open db for room '{}', probably doesn't exist yet. ({})", room_id, e.what());
         return {};
@@ -3235,7 +3331,7 @@ Cache::getTimelineRange(const std::string &room_id)
     lmdb::dbi orderDb;
     try {
         orderDb = getOrderToMessageDb(txn, room_id);
-    } catch (lmdb::runtime_error &e) {
+    } catch (lmdb::error &e) {
         nhlog::db()->error(
           "Can't open db for room '{}', probably doesn't exist yet. ({})", room_id, e.what());
         return {};
@@ -3269,7 +3365,7 @@ Cache::getTimelineIndex(const std::string &room_id, std::string_view event_id)
     lmdb::dbi orderDb;
     try {
         orderDb = getMessageToOrderDb(txn, room_id);
-    } catch (lmdb::runtime_error &e) {
+    } catch (lmdb::error &e) {
         nhlog::db()->error(
           "Can't open db for room '{}', probably doesn't exist yet. ({})", room_id, e.what());
         return {};
@@ -3296,7 +3392,7 @@ Cache::getEventIndex(const std::string &room_id, std::string_view event_id)
     lmdb::dbi orderDb;
     try {
         orderDb = getEventToOrderDb(txn, room_id);
-    } catch (lmdb::runtime_error &e) {
+    } catch (lmdb::error &e) {
         nhlog::db()->error(
           "Can't open db for room '{}', probably doesn't exist yet. ({})", room_id, e.what());
         return {};
@@ -3327,7 +3423,7 @@ Cache::lastInvisibleEventAfter(const std::string &room_id, std::string_view even
         orderDb      = getEventToOrderDb(txn, room_id);
         eventOrderDb = getEventOrderDb(txn, room_id);
         timelineDb   = getMessageToOrderDb(txn, room_id);
-    } catch (lmdb::runtime_error &e) {
+    } catch (lmdb::error &e) {
         nhlog::db()->error(
           "Can't open db for room '{}', probably doesn't exist yet. ({})", room_id, e.what());
         return {};
@@ -3402,7 +3498,7 @@ Cache::lastVisibleEvent(const std::string &room_id, std::string_view event_id)
         }
 
         return std::pair{idx, evId};
-    } catch (lmdb::runtime_error &e) {
+    } catch (lmdb::error &e) {
         nhlog::db()->error("Failed to get last visible event after {}", event_id, e.what());
         return {};
     }
@@ -3415,7 +3511,7 @@ Cache::getTimelineEventId(const std::string &room_id, uint64_t index)
     lmdb::dbi orderDb;
     try {
         orderDb = getOrderToMessageDb(txn, room_id);
-    } catch (lmdb::runtime_error &e) {
+    } catch (lmdb::error &e) {
         nhlog::db()->error(
           "Can't open db for room '{}', probably doesn't exist yet. ({})", room_id, e.what());
         return {};
@@ -3448,6 +3544,12 @@ Cache::invites()
             result.insert(QString::fromStdString(std::string(room_id)), std::move(tmp));
         } catch (const nlohmann::json::exception &e) {
             nhlog::db()->warn("failed to parse room info for invite: "
+                              "room_id ({}), {}: {}",
+                              room_id,
+                              std::string(room_data),
+                              e.what());
+        } catch (const lmdb::error &e) {
+            nhlog::db()->warn("failed to retrieve invite members for: "
                               "room_id ({}), {}: {}",
                               room_id,
                               std::string(room_data),
