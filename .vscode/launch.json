@@ -5,20 +5,23 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug Nheko (Native Debug/GDB)",
-            "type": "gdb",
-            "request": "launch",
-            "target": "${workspaceFolder}/build/nheko",
-            "cwd": "${workspaceFolder}",
-            "gdbpath": "/usr/bin/gdb",
-            "valuesFormatting": "parseText"
-        },
-        {
             "name": "Debug Nheko (CodeLLDB)",
             "type": "lldb",
             "request": "launch",
             "program": "${workspaceFolder}/build/nheko",
-            "cwd": "${workspaceFolder}"
+            "cwd": "${workspaceFolder}",
+            "initCommands": [
+                "breakpoint set -E c++ -O false"
+            ]
+        },
+        {
+            "name": "Debug Nheko (Native Debug/GDB)",
+            "type": "gdb",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/nheko",
+            "cwd": "${workspaceFolder}",
+            "gdbpath": "/usr/bin/gdb",
+            "valuesFormatting": "parseText"
         }
     ]
 }

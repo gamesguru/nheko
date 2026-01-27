@@ -177,10 +177,10 @@ UserSettings::load(std::optional<QString> profile)
 UserSettings::DatabaseBackend
 UserSettings::databaseBackend() const
 {
-    // Migration: Check old boolean if new setting doesn't exist?
-    // For now, simpler to just read the string/int.
     auto val = settings.value("database/backend", "LMDB").toString();
+
     if (val == "PostgreSQL") return DatabaseBackend::PostgreSQL;
+    if (val == "SQLite") return DatabaseBackend::SQLite;
     return DatabaseBackend::LMDB;
 }
 
@@ -190,6 +190,7 @@ UserSettings::setDatabaseBackend(DatabaseBackend value)
     QString val;
     switch(value) {
         case DatabaseBackend::PostgreSQL: val = "PostgreSQL"; break;
+        case DatabaseBackend::SQLite: val = "SQLite"; break;
         default: val = "LMDB"; break;
     }
     settings.setValue("database/backend", val);
@@ -1810,8 +1811,8 @@ UserSettingsModel::data(const QModelIndex &index, int role) const
 #ifdef NHEKO_POSTGRES_SUPPORT
              return QStringList{
                  QStringLiteral("LMDB (v1)"),
-                 QStringLiteral("PostgreSQL (v2)"),
                  QStringLiteral("SQLite (v2)"),
+                 QStringLiteral("PostgreSQL (v2)"),
              };
 #else
              return QStringList{
@@ -2322,11 +2323,11 @@ UserSettingsModel::setData(const QModelIndex &index, const QVariant &value, int 
         case UsePostgres: {
              auto idx = value.toInt();
 #ifdef NHEKO_POSTGRES_SUPPORT
-             // Dropdown: 0=LMDB, 1=PostgreSQL, 2=SQLite
+             // Dropdown: 0=LMDB, 1=SQLite, 2=PostgreSQL
              switch (idx) {
                  case 0: i->setDatabaseBackend(UserSettings::DatabaseBackend::LMDB); return true;
-                 case 1: i->setDatabaseBackend(UserSettings::DatabaseBackend::PostgreSQL); return true;
-                 case 2: i->setDatabaseBackend(UserSettings::DatabaseBackend::SQLite); return true;
+                 case 1: i->setDatabaseBackend(UserSettings::DatabaseBackend::SQLite); return true;
+                 case 2: i->setDatabaseBackend(UserSettings::DatabaseBackend::PostgreSQL); return true;
              }
 #else
              // Dropdown: 0=LMDB, 1=SQLite (Postgres not shown)
