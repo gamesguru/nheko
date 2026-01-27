@@ -191,6 +191,19 @@ UserSettings::setDatabaseBackend(DatabaseBackend value)
     emit databaseBackendChanged();
 }
 
+QString
+UserSettings::postgresUrl() const
+{
+    return settings.value("database/postgres_url", "postgresql://user:password@localhost/nheko").toString();
+}
+
+void
+UserSettings::setPostgresUrl(QString value)
+{
+    settings.setValue("database/postgres_url", value);
+    emit postgresUrlChanged();
+}
+
 bool
 UserSettings::useIdenticon() const
 {
@@ -2302,6 +2315,7 @@ UserSettingsModel::setData(const QModelIndex &index, const QVariant &value, int 
             } else
                 return false;
         }
+    }
     }
     return false;
 }

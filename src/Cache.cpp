@@ -2607,8 +2607,6 @@ try {
                      storage_backend_->saveRoom(*pgtxn, room.first, updatedInfo);
                      pgtxn->commit();
                  } catch (std::exception &e) {
-                     pgtxn->commit();
-                 } catch (std::exception &e) {
                      nhlog::db()->error("Failed to mirror room {} to Postgres: {}", room.first, e.what());
                  }
             } else if (UserSettings::instance()->databaseBackend() == UserSettings::DatabaseBackend::SQLite) {
