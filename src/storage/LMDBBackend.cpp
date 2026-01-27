@@ -110,19 +110,13 @@ void LMDBBackend::saveStateEvent(StorageTransaction& txn,
 void LMDBBackend::saveMember(StorageTransaction& txn,
                              const std::string& roomId,
                              const std::string& userId,
-                             const std::string& memberInfoJson) {
+                             const std::string& memberInfoJson,
+                             const std::string& membership) {
     (void)txn;
     (void)roomId;
     (void)userId;
     (void)memberInfoJson;
-}
-
-void LMDBBackend::deleteMember(StorageTransaction& txn,
-                               const std::string& roomId,
-                               const std::string& userId) {
-    (void)txn;
-    (void)roomId;
-    (void)userId;
+    (void)membership;
 }
 
 } // namespace cache

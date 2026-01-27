@@ -170,19 +170,13 @@ void PostgresBackend::saveStateEvent(StorageTransaction& txn,
 void PostgresBackend::saveMember(StorageTransaction& txn,
                                  const std::string& roomId,
                                  const std::string& userId,
-                                 const std::string& memberInfoJson) {
+                                 const std::string& memberInfoJson,
+                                 const std::string& membership) {
     (void)txn;
     (void)roomId;
     (void)userId;
     (void)memberInfoJson;
-}
-
-void PostgresBackend::deleteMember(StorageTransaction& txn,
-                                   const std::string& roomId,
-                                   const std::string& userId) {
-    (void)txn;
-    (void)roomId;
-    (void)userId;
+    (void)membership;
 }
 
 } // namespace cache

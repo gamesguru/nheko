@@ -2369,11 +2369,39 @@ Cache::saveStateEvent(lmdb::txn &txn,
               e->content.is_direct,
             };
 
-            membersdb.put(txn, e->state_key, nlohmann::json(tmp).dump());
+            auto memberJson = nlohmann::json(tmp).dump();
+            membersdb.put(txn, e->state_key, memberJson);
+
+            if (sqlTxn) {
+                try {
+                    storage_backend_->saveMember(*sqlTxn, room_id, e->state_key, memberJson, nlohmann::json(e->content.membership).get<std::string>());
+                } catch (std::exception &ex) {
+                    nhlog::db()->warn("Failed to save member to SQL: {}", ex.what());
+                }
+            }
             break;
         }
         default: {
             membersdb.del(txn, e->state_key, "");
+
+            if (sqlTxn) {
+                try {
+                    auto display_name =
+                      e->content.display_name.empty() ? e->state_key : e->content.display_name;
+
+                    MemberInfo tmp{
+                      display_name,
+                      e->content.avatar_url,
+                      "",
+                      e->content.reason,
+                      e->content.is_direct,
+                    };
+
+                    storage_backend_->saveMember(*sqlTxn, room_id, e->state_key, nlohmann::json(tmp).dump(), nlohmann::json(e->content.membership).get<std::string>());
+                } catch (std::exception &ex) {
+                    nhlog::db()->warn("Failed to soft-delete member from SQL: {}", ex.what());
+                }
+            }
             break;
         }
         }

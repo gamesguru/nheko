@@ -48,10 +48,8 @@ public:
     virtual void saveMember(StorageTransaction& txn,
                             const std::string& roomId,
                             const std::string& userId,
-                            const std::string& memberInfoJson) = 0;
-    virtual void deleteMember(StorageTransaction& txn,
-                              const std::string& roomId,
-                              const std::string& userId) = 0;
+                            const std::string& memberInfoJson,
+                            const std::string& membership) = 0;
 
     // ... (We will populate this iteratively as we migrate methods)
 };
