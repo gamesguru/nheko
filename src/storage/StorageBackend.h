@@ -39,6 +39,19 @@ public:
 
     // Events
     virtual void saveEvent(StorageTransaction& txn, const std::string& eventId, const std::string& roomId, const std::string& eventJson) = 0;
+    virtual void saveStateEvent(StorageTransaction& txn,
+                                const std::string& eventId,
+                                const std::string& roomId,
+                                const std::string& type,
+                                const std::string& stateKey,
+                                const std::string& eventJson) = 0;
+    virtual void saveMember(StorageTransaction& txn,
+                            const std::string& roomId,
+                            const std::string& userId,
+                            const std::string& memberInfoJson) = 0;
+    virtual void deleteMember(StorageTransaction& txn,
+                              const std::string& roomId,
+                              const std::string& userId) = 0;
 
     // ... (We will populate this iteratively as we migrate methods)
 };

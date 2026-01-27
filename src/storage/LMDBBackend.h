@@ -24,6 +24,19 @@ public:
     std::vector<std::string> getRoomIds(StorageTransaction& txn) override;
     
     void saveEvent(StorageTransaction& txn, const std::string& eventId, const std::string& roomId, const std::string& eventJson) override;
+    void saveStateEvent(StorageTransaction& txn,
+                        const std::string& eventId,
+                        const std::string& roomId,
+                        const std::string& type,
+                        const std::string& stateKey,
+                        const std::string& eventJson) override;
+    void saveMember(StorageTransaction& txn,
+                    const std::string& roomId,
+                    const std::string& userId,
+                    const std::string& memberInfoJson) override;
+    void deleteMember(StorageTransaction& txn,
+                      const std::string& roomId,
+                      const std::string& userId) override;
 
     // Expose raw environment for legacy Cache compatibility
     lmdb::env& getEnv();

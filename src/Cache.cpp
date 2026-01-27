@@ -2324,10 +2324,11 @@ Cache::saveStateEvents(lmdb::txn &txn,
                        lmdb::dbi &membersdb,
                        lmdb::dbi &eventsDb,
                        const std::string &room_id,
-                       const std::vector<T> &events)
+                       const std::vector<T> &events,
+                       cache::StorageTransaction *sqlTxn)
 {
     for (const auto &e : events)
-        saveStateEvent(txn, statesdb, stateskeydb, membersdb, eventsDb, room_id, e);
+        saveStateEvent(txn, statesdb, stateskeydb, membersdb, eventsDb, room_id, e, sqlTxn);
 }
 
 template<class T>
@@ -2338,7 +2339,8 @@ Cache::saveStateEvent(lmdb::txn &txn,
                       lmdb::dbi &membersdb,
                       lmdb::dbi &eventsDb,
                       const std::string &room_id,
-                      const T &event)
+                      const T &event,
+                      cache::StorageTransaction *sqlTxn)
 {
     using namespace mtx::events;
     using namespace mtx::events::state;
@@ -2389,9 +2391,19 @@ Cache::saveStateEvent(lmdb::txn &txn,
     }
 
     std::visit(
-      [&txn, &statesdb, &stateskeydb, &eventsDb, &membersdb](const auto &e) {
+      [&txn, &statesdb, &stateskeydb, &eventsDb, &membersdb, sqlTxn, &room_id, this](const auto &e) {
           if constexpr (isStateEvent_<decltype(e)>) {
-              eventsDb.put(txn, e.event_id, nlohmann::json(e).dump());
+              auto eventJson = nlohmann::json(e).dump();
+              eventsDb.put(txn, e.event_id, eventJson);
+
+              if (sqlTxn) {
+                try {
+                    storage_backend_->saveStateEvent(
+                        *sqlTxn, e.event_id, room_id, to_string(e.type), e.state_key, eventJson);
+                } catch (std::exception &ex) {
+                    nhlog::db()->warn("Failed to save state event to SQL: {}", ex.what());
+                }
+              }
 
               if (e.type != EventType::Unsupported) {
                   if (std::is_same_v<std::remove_cv_t<std::remove_reference_t<decltype(e)>>,
@@ -2498,9 +2510,9 @@ try {
 
         nhlog::db()->debug("Saving state events for room {}", room.first);
         saveStateEvents(
-          txn, statesdb, stateskeydb, membersdb, eventsDb, room.first, room.second.state.events);
+          txn, statesdb, stateskeydb, membersdb, eventsDb, room.first, room.second.state.events, sqlTxn.get());
         saveStateEvents(
-          txn, statesdb, stateskeydb, membersdb, eventsDb, room.first, room.second.timeline.events);
+          txn, statesdb, stateskeydb, membersdb, eventsDb, room.first, room.second.timeline.events, sqlTxn.get());
 
         nhlog::db()->debug("Saving timeline messages for room {}", room.first);
         saveTimelineMessages(txn, eventsDb, room.first, room.second.timeline, sqlTxn.get());

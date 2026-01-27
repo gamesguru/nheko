@@ -381,7 +381,8 @@ private:
                          lmdb::dbi &membersdb,
                          lmdb::dbi &eventsDb,
                          const std::string &room_id,
-                         const std::vector<T> &events);
+                         const std::vector<T> &events,
+                         cache::StorageTransaction *sqlTxn = nullptr);
 
     template<class T>
     void saveStateEvent(lmdb::txn &txn,
@@ -390,7 +391,8 @@ private:
                         lmdb::dbi &membersdb,
                         lmdb::dbi &eventsDb,
                         const std::string &room_id,
-                        const T &event);
+                        const T &event,
+                        cache::StorageTransaction *sqlTxn = nullptr);
 
     template<typename T>
     std::optional<mtx::events::StateEvent<T>>

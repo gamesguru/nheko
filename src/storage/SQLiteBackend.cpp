@@ -77,7 +77,8 @@ void SQLiteBackend::initializeSchema() {
         "CREATE TABLE IF NOT EXISTS rooms (room_id TEXT PRIMARY KEY, info TEXT);",
         "CREATE TABLE IF NOT EXISTS room_members (room_id TEXT, user_id TEXT, info TEXT, PRIMARY KEY(room_id, user_id));",
         "CREATE TABLE IF NOT EXISTS events (event_id TEXT PRIMARY KEY, room_id TEXT, idx INTEGER, body TEXT);",
-        "CREATE INDEX IF NOT EXISTS idx_events_room ON events(room_id, idx);"
+        "CREATE INDEX IF NOT EXISTS idx_events_room ON events(room_id, idx);",
+        "CREATE TABLE IF NOT EXISTS state_events (room_id TEXT, type TEXT, state_key TEXT, event_id TEXT, PRIMARY KEY(room_id, type, state_key));"
     };
     
     char* errMsg = nullptr;
@@ -178,6 +179,88 @@ void SQLiteBackend::saveEvent(StorageTransaction& txn, const std::string& eventI
         std::string err = sqlite3_errmsg(db);
         sqlite3_finalize(stmt);
         throw std::runtime_error("Failed to save event: " + err);
+    }
+    
+    sqlite3_finalize(stmt);
+}
+
+void SQLiteBackend::saveStateEvent(StorageTransaction& txn,
+                                   const std::string& eventId,
+                                   const std::string& roomId,
+                                   const std::string& type,
+                                   const std::string& stateKey,
+                                   const std::string& eventJson) {
+    // Mirror content to generic events table
+    saveEvent(txn, eventId, roomId, eventJson);
+
+    auto db = static_cast<SQLiteTransaction&>(txn).get();
+    sqlite3_stmt* stmt;
+    
+    const char* sql = "INSERT INTO state_events (room_id, type, state_key, event_id) VALUES (?, ?, ?, ?) ON CONFLICT(room_id, type, state_key) DO UPDATE SET event_id=excluded.event_id";
+    
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        throw std::runtime_error("Failed to prepare saveStateEvent statement: " + std::string(sqlite3_errmsg(db)));
+    }
+    
+    sqlite3_bind_text(stmt, 1, roomId.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, type.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 3, stateKey.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 4, eventId.c_str(), -1, SQLITE_STATIC);
+    
+    if (sqlite3_step(stmt) != SQLITE_DONE) {
+        std::string err = sqlite3_errmsg(db);
+        sqlite3_finalize(stmt);
+        throw std::runtime_error("Failed to save state event: " + err);
+    }
+    
+    sqlite3_finalize(stmt);
+}
+
+void SQLiteBackend::saveMember(StorageTransaction& txn,
+                               const std::string& roomId,
+                               const std::string& userId,
+                               const std::string& memberInfoJson) {
+    auto db = static_cast<SQLiteTransaction&>(txn).get();
+    sqlite3_stmt* stmt;
+    
+    const char* sql = "INSERT INTO room_members (room_id, user_id, info) VALUES (?, ?, ?) ON CONFLICT(room_id, user_id) DO UPDATE SET info=excluded.info";
+    
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        throw std::runtime_error("Failed to prepare saveMember statement: " + std::string(sqlite3_errmsg(db)));
+    }
+    
+    sqlite3_bind_text(stmt, 1, roomId.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, userId.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 3, memberInfoJson.c_str(), -1, SQLITE_STATIC);
+    
+    if (sqlite3_step(stmt) != SQLITE_DONE) {
+        std::string err = sqlite3_errmsg(db);
+        sqlite3_finalize(stmt);
+        throw std::runtime_error("Failed to save member: " + err);
+    }
+    
+    sqlite3_finalize(stmt);
+}
+
+void SQLiteBackend::deleteMember(StorageTransaction& txn,
+                                 const std::string& roomId,
+                                 const std::string& userId) {
+    auto db = static_cast<SQLiteTransaction&>(txn).get();
+    sqlite3_stmt* stmt;
+    
+    const char* sql = "DELETE FROM room_members WHERE room_id = ? AND user_id = ?";
+    
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        throw std::runtime_error("Failed to prepare deleteMember statement: " + std::string(sqlite3_errmsg(db)));
+    }
+    
+    sqlite3_bind_text(stmt, 1, roomId.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, userId.c_str(), -1, SQLITE_STATIC);
+    
+    if (sqlite3_step(stmt) != SQLITE_DONE) {
+        std::string err = sqlite3_errmsg(db);
+        sqlite3_finalize(stmt);
+        throw std::runtime_error("Failed to delete member: " + err);
     }
     
     sqlite3_finalize(stmt);

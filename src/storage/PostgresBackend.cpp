@@ -153,4 +153,36 @@ void PostgresBackend::saveEvent(StorageTransaction& txn, const std::string& even
     (void)eventJson;
 }
 
+void PostgresBackend::saveStateEvent(StorageTransaction& txn,
+                                     const std::string& eventId,
+                                     const std::string& roomId,
+                                     const std::string& type,
+                                     const std::string& stateKey,
+                                     const std::string& eventJson) {
+    (void)txn;
+    (void)eventId;
+    (void)roomId;
+    (void)type;
+    (void)stateKey;
+    (void)eventJson;
+}
+
+void PostgresBackend::saveMember(StorageTransaction& txn,
+                                 const std::string& roomId,
+                                 const std::string& userId,
+                                 const std::string& memberInfoJson) {
+    (void)txn;
+    (void)roomId;
+    (void)userId;
+    (void)memberInfoJson;
+}
+
+void PostgresBackend::deleteMember(StorageTransaction& txn,
+                                   const std::string& roomId,
+                                   const std::string& userId) {
+    (void)txn;
+    (void)roomId;
+    (void)userId;
+}
+
 } // namespace cache
