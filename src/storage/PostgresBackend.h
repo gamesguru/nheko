@@ -28,6 +28,11 @@ public:
                         const std::string& type,
                         const std::string& stateKey,
                         const std::string& eventJson) override;
+    void saveMember(StorageTransaction& txn,
+                    const std::string& roomId,
+                    const std::string& userId,
+                    const std::string& memberInfoJson,
+                    const std::string& membership) override;
 
 private:
     std::string connectionUrl_;

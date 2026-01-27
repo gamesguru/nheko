@@ -33,10 +33,8 @@ public:
     void saveMember(StorageTransaction& txn,
                     const std::string& roomId,
                     const std::string& userId,
-                    const std::string& memberInfoJson) override;
-    void deleteMember(StorageTransaction& txn,
-                      const std::string& roomId,
-                      const std::string& userId) override;
+                    const std::string& memberInfoJson,
+                    const std::string& membership) override;
 
     // Expose raw environment for legacy Cache compatibility
     lmdb::env& getEnv();
