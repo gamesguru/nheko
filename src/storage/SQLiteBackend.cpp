@@ -4,6 +4,7 @@
 #include <sqlite3.h>
 #include <nlohmann/json.hpp>
 #include <stdexcept>
+#include <atomic>
 
 namespace cache {
 
@@ -11,32 +12,49 @@ namespace cache {
 class SQLiteTransaction : public StorageTransaction {
 public:
     SQLiteTransaction(sqlite3* db) : db_(db) {
+        // Generate a unique savepoint name
+        static std::atomic<uint64_t> savepointId{0};
+        savepointName_ = "SP_" + std::to_string(savepointId++);
+        
         char* errMsg = nullptr;
-        if (sqlite3_exec(db_, "BEGIN", nullptr, nullptr, &errMsg) != SQLITE_OK) {
+        std::string sql = "SAVEPOINT " + savepointName_;
+        if (sqlite3_exec(db_, sql.c_str(), nullptr, nullptr, &errMsg) != SQLITE_OK) {
             std::string err = errMsg ? errMsg : "Unknown error";
             sqlite3_free(errMsg);
-            nhlog::db()->error("SQLite: Failed to start transaction: {}", err);
+            nhlog::db()->error("SQLite: Failed to start transaction (savepoint {}): {}", savepointName_, err);
             throw std::runtime_error("Failed to start transaction: " + err);
         }
+        // nhlog::db()->debug("SQLite: Started transaction (savepoint {})", savepointName_);
     }
     ~SQLiteTransaction() override {
         if (!committed_) {
             char* errMsg = nullptr;
-            sqlite3_exec(db_, "ROLLBACK", nullptr, nullptr, &errMsg);
+            std::string sql = "ROLLBACK TO " + savepointName_;
+            sqlite3_exec(db_, sql.c_str(), nullptr, nullptr, &errMsg); // Rollback to savepoint
             sqlite3_free(errMsg);
+            
+            // Release the savepoint
+            sql = "RELEASE " + savepointName_;
+            sqlite3_exec(db_, sql.c_str(), nullptr, nullptr, nullptr);
+            // nhlog::db()->debug("SQLite: Rolled back transaction (savepoint {})", savepointName_);
         }
     }
     
     void commit() override {
+        if (committed_) return;
+        
         char* errMsg = nullptr;
-        nhlog::db()->debug("SQLite: Committing transaction");
-        if (sqlite3_exec(db_, "COMMIT", nullptr, nullptr, &errMsg) != SQLITE_OK) {
+        // RELEASE commits the work for this savepoint (merging it into the parent transaction)
+        std::string sql = "RELEASE " + savepointName_;
+        // nhlog::db()->debug("SQLite: Committing transaction (releasing savepoint {})", savepointName_);
+        
+        if (sqlite3_exec(db_, sql.c_str(), nullptr, nullptr, &errMsg) != SQLITE_OK) {
             std::string err = errMsg ? errMsg : "Unknown error";
             sqlite3_free(errMsg);
-            nhlog::db()->error("SQLite: Failed to commit transaction: {}", err);
+            nhlog::db()->error("SQLite: Failed to commit transaction (release savepoint {}): {}", savepointName_, err);
             throw std::runtime_error("Failed to commit transaction: " + err);
         }
-        nhlog::db()->debug("SQLite: Transaction committed");
+        // nhlog::db()->debug("SQLite: Transaction committed (released savepoint {})", savepointName_);
         committed_ = true;
     }
     
@@ -44,6 +62,7 @@ public:
 
 private:
     sqlite3* db_;
+    std::string savepointName_;
     bool committed_ = false;
 };
 

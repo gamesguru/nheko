@@ -177,11 +177,11 @@ UserSettings::load(std::optional<QString> profile)
 UserSettings::DatabaseBackend
 UserSettings::databaseBackend() const
 {
-    auto val = settings.value("database/backend", "LMDB").toString();
+    auto val = settings.value("database/backend", "SQLite").toString();
 
     if (val == "PostgreSQL") return DatabaseBackend::PostgreSQL;
     if (val == "SQLite") return DatabaseBackend::SQLite;
-    return DatabaseBackend::LMDB;
+    return DatabaseBackend::SQLite;
 }
 
 void
@@ -191,7 +191,7 @@ UserSettings::setDatabaseBackend(DatabaseBackend value)
     switch(value) {
         case DatabaseBackend::PostgreSQL: val = "PostgreSQL"; break;
         case DatabaseBackend::SQLite: val = "SQLite"; break;
-        default: val = "LMDB"; break;
+        default: val = "SQLite"; break;
     }
     settings.setValue("database/backend", val);
     nhlog::db()->info("User switched database backend to: {}", val.toStdString());
