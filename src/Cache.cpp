@@ -2503,7 +2503,7 @@ try {
           txn, statesdb, stateskeydb, membersdb, eventsDb, room.first, room.second.timeline.events);
 
         nhlog::db()->debug("Saving timeline messages for room {}", room.first);
-        saveTimelineMessages(txn, eventsDb, room.first, room.second.timeline);
+        saveTimelineMessages(txn, eventsDb, room.first, room.second.timeline, sqlTxn.get());
         nhlog::db()->debug("Saved timeline messages for room {}", room.first);
 
         RoomInfo updatedInfo;
@@ -4059,7 +4059,8 @@ void
 Cache::saveTimelineMessages(lmdb::txn &txn,
                             lmdb::dbi &eventsDb,
                             const std::string &room_id,
-                            const mtx::responses::Timeline &res)
+                            const mtx::responses::Timeline &res,
+                            cache::StorageTransaction *sqlTxn)
 {
     if (res.events.empty())
         return;
@@ -4108,6 +4109,14 @@ Cache::saveTimelineMessages(lmdb::txn &txn,
         }
 
         std::string_view event_id = event_id_val;
+
+        if (sqlTxn) {
+            try {
+                storage_backend_->saveEvent(*sqlTxn, event_id_val, room_id, event.dump());
+            } catch (std::exception &e) {
+                nhlog::db()->warn("Failed to mirror event {} to SQL: {}", event_id_val, e.what());
+            }
+        }
 
         nlohmann::json orderEntry = nlohmann::json::object();
         orderEntry["event_id"]    = event_id_val;
@@ -4256,6 +4265,15 @@ Cache::saveOldMessages(const std::string &room_id, const mtx::responses::Message
     auto eventsDb    = getEventsDb(txn, room_id);
     auto relationsDb = getRelationsDb(txn, room_id);
 
+    std::unique_ptr<cache::StorageTransaction> sqlTxn;
+    if (UserSettings::instance()->databaseBackend() != UserSettings::DatabaseBackend::LMDB) {
+        try {
+            sqlTxn = storage_backend_->createTransaction();
+        } catch (std::exception &e) {
+            nhlog::db()->warn("Failed to create SQL transaction for old messages: {}", e.what());
+        }
+    }
+
     auto orderDb     = getEventOrderDb(txn, room_id);
     auto evToOrderDb = getEventToOrderDb(txn, room_id);
     auto msg2orderDb = getMessageToOrderDb(txn, room_id);
@@ -4320,6 +4338,14 @@ Cache::saveOldMessages(const std::string &room_id, const mtx::responses::Message
         }
         eventsDb.put(txn, event_id, event.dump());
 
+        if (sqlTxn) {
+            try {
+                storage_backend_->saveEvent(*sqlTxn, event_id_val, room_id, event.dump());
+            } catch (std::exception &e) {
+                nhlog::db()->warn("Failed to mirror old event {} to SQL: {}", event_id_val, e.what());
+            }
+        }
+
         auto relations = mtx::accessors::relations(e);
         if (!relations.relations.empty()) {
             for (const auto &r : relations.relations) {
@@ -4350,6 +4376,14 @@ Cache::saveOldMessages(const std::string &room_id, const mtx::responses::Message
         orderEntry["event_id"]   = event_id_val;
         orderEntry["prev_batch"] = res.end;
         orderDb.put(txn, lmdb::to_sv(index), orderEntry.dump());
+    }
+
+    if (sqlTxn) {
+        try {
+            sqlTxn->commit();
+        } catch (std::exception &e) {
+            nhlog::db()->warn("Failed to commit SQL transaction for old messages: {}", e.what());
+        }
     }
 
     txn.commit();

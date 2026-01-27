@@ -9,10 +9,7 @@
             "type": "lldb",
             "request": "launch",
             "program": "${workspaceFolder}/build/nheko",
-            "cwd": "${workspaceFolder}",
-            "initCommands": [
-                "breakpoint set -E c++ -O false"
-            ]
+            "cwd": "${workspaceFolder}"
         },
         {
             "name": "Debug Nheko (Native Debug/GDB)",

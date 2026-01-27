@@ -60,7 +60,10 @@ SQLiteBackend::SQLiteBackend(const std::string& dbPath) {
         sqlite3_close(db_);
         throw std::runtime_error("Failed to open SQLite database: " + err);
     }
-    
+
+    // waiting for up to 10s to get the lock
+    sqlite3_busy_timeout(db_, 10000);
+
     initializeSchema();
 }
 
@@ -153,6 +156,31 @@ std::vector<std::string> SQLiteBackend::getRoomIds(StorageTransaction& txn) {
     }
     
     return rooms;
+}
+
+// ... (existing helper methods)
+
+void SQLiteBackend::saveEvent(StorageTransaction& txn, const std::string& eventId, const std::string& roomId, const std::string& eventJson) {
+    auto db = static_cast<SQLiteTransaction&>(txn).get();
+    
+    sqlite3_stmt* stmt;
+    const char* sql = "INSERT INTO events (event_id, room_id, body) VALUES (?, ?, ?) ON CONFLICT(event_id) DO UPDATE SET body=excluded.body";
+    
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        throw std::runtime_error("Failed to prepare saveEvent statement: " + std::string(sqlite3_errmsg(db)));
+    }
+    
+    sqlite3_bind_text(stmt, 1, eventId.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, roomId.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 3, eventJson.c_str(), -1, SQLITE_STATIC);
+    
+    if (sqlite3_step(stmt) != SQLITE_DONE) {
+        std::string err = sqlite3_errmsg(db);
+        sqlite3_finalize(stmt);
+        throw std::runtime_error("Failed to save event: " + err);
+    }
+    
+    sqlite3_finalize(stmt);
 }
 
 } // namespace cache

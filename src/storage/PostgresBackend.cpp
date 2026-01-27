@@ -144,3 +144,13 @@ std::vector<std::string> PostgresBackend::getRoomIds(StorageTransaction& txn) {
 }
 
 } // namespace cache
+
+void PostgresBackend::saveEvent(StorageTransaction& txn, const std::string& eventId, const std::string& roomId, const std::string& eventJson) {
+    // Stub implementation for now
+    (void)txn;
+    (void)eventId;
+    (void)roomId;
+    (void)eventJson;
+}
+
+} // namespace cache

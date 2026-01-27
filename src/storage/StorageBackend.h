@@ -37,6 +37,9 @@ public:
     virtual std::optional<RoomInfo> getRoom(StorageTransaction& txn, const std::string& roomId) = 0;
     virtual std::vector<std::string> getRoomIds(StorageTransaction& txn) = 0;
 
+    // Events
+    virtual void saveEvent(StorageTransaction& txn, const std::string& eventId, const std::string& roomId, const std::string& eventJson) = 0;
+
     // ... (We will populate this iteratively as we migrate methods)
 };
 

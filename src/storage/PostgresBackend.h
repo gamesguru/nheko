@@ -20,6 +20,8 @@ public:
     void saveRoom(StorageTransaction& txn, const std::string& roomId, const RoomInfo& info) override;
     std::optional<RoomInfo> getRoom(StorageTransaction& txn, const std::string& roomId) override;
     std::vector<std::string> getRoomIds(StorageTransaction& txn) override;
+    
+    void saveEvent(StorageTransaction& txn, const std::string& eventId, const std::string& roomId, const std::string& eventJson) override;
 
 private:
     std::string connectionUrl_;

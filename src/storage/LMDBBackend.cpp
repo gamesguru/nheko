@@ -84,5 +84,13 @@ std::vector<std::string> LMDBBackend::getRoomIds(StorageTransaction& txn) {
     return rooms;
 }
 
+void LMDBBackend::saveEvent(StorageTransaction& txn, const std::string& eventId, const std::string& roomId, const std::string& eventJson) {
+    // No-op: LMDB storage for events is handled directly by Cache.cpp logic currently.
+    // This method exists to satisfy the interface for SQL backends.
+    (void)txn;
+    (void)eventId;
+    (void)roomId;
+    (void)eventJson;
+}
 
 } // namespace cache

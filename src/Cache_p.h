@@ -25,6 +25,7 @@ struct StateEvents;
 
 namespace cache {
 class StorageBackend;
+class StorageTransaction;
 }
 
 namespace lmdb {
@@ -362,7 +363,8 @@ private:
     void saveTimelineMessages(lmdb::txn &txn,
                               lmdb::dbi &eventsDb,
                               const std::string &room_id,
-                              const mtx::responses::Timeline &res);
+                              const mtx::responses::Timeline &res,
+                              cache::StorageTransaction *sqlTxn = nullptr);
 
     //! retrieve a specific event from account data
     //! pass empty room_id for global account data

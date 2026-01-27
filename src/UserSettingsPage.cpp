@@ -2339,10 +2339,12 @@ UserSettingsModel::setData(const QModelIndex &index, const QVariant &value, int 
              return false;
         }
         case PostgresUrl: {
+#ifdef NHEKO_POSTGRES_SUPPORT
              if (value.userType() == QMetaType::QString) {
                 i->setPostgresUrl(value.toString());
                 return true;
             } else
+#endif
                 return false;
         }
     }
