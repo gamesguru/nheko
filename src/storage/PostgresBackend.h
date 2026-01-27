@@ -16,6 +16,7 @@ public:
     void initializeSchema();
 
     std::unique_ptr<StorageTransaction> createTransaction() override;
+    bool isSql() const override { return true; }
 
     void saveRoom(StorageTransaction& txn, const std::string& roomId, const RoomInfo& info) override;
     std::optional<RoomInfo> getRoom(StorageTransaction& txn, const std::string& roomId) override;
@@ -33,6 +34,15 @@ public:
                     const std::string& userId,
                     const std::string& memberInfoJson,
                     const std::string& membership) override;
+    void saveMediaMetadata(StorageTransaction& txn,
+                           const std::string& eventId,
+                           const std::string& roomId,
+                           const std::string& filename,
+                           const std::string& mimetype,
+                           int64_t size,
+                           int width,
+                           int height,
+                           const std::string& blurhash) override;
 
 private:
     std::string connectionUrl_;

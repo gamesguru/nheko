@@ -1270,6 +1270,8 @@ UserSettingsModel::data(const QModelIndex &index, int role) const
             return tr("Periodically update community routing information");
         case ExpireEvents:
             return tr("Periodically delete expired events");
+        case StorageSection:
+            return tr("STORAGE");
         }
     } else if (role == Value) {
         switch (index.row()) {

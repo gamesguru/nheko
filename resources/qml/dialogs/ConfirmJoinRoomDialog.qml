@@ -139,7 +139,7 @@ ApplicationWindow {
 
         Button {
             text: summary.isKnockOnly ? qsTr("Knock") : qsTr("Join")
-            enabled: input.text.match("#.+?:.{3,}")
+            enabled: summary.roomid !== ""
             DialogButtonBox.buttonRole: DialogButtonBox.AcceptRole
         }
 

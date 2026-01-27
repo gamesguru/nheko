@@ -194,6 +194,9 @@ if(USE_BUNDLED_SPDLOG)
 endif()
 find_package(spdlog 1.0.0 CONFIG REQUIRED)
 
+# SQLite3 is now a mandatory dependency for v2 storage
+find_package(SQLite3 REQUIRED)
+
 if(USE_BUNDLED_COEURL)
     include(FetchContent)
     FetchContent_Declare(
@@ -927,7 +930,7 @@ if(USE_BUNDLED_KDSINGLEAPPLICATION)
     target_include_directories(nheko PRIVATE ${kdsingleapplication_SOURCE_DIR} ${kdsingleapplication_BINARY_DIR})
 endif()
 
-find_package(SQLite3 REQUIRED)
+# target_link_libraries already has SQLite::SQLite3 if found REQUIRED above
 target_link_libraries(nheko PRIVATE SQLite::SQLite3)
 
 if(NOT JSON_ImplicitConversions)

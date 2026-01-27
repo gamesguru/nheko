@@ -31,6 +31,7 @@ public:
     virtual ~StorageBackend() = default;
 
     virtual std::unique_ptr<StorageTransaction> createTransaction() = 0;
+    virtual bool isSql() const = 0;
 
     // Room Info
     virtual void saveRoom(StorageTransaction& txn, const std::string& roomId, const RoomInfo& info) = 0;

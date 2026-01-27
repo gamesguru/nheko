@@ -2170,7 +2170,16 @@ Cache::updateState(const std::string &room, const mtx::responses::StateEvents &s
         stateskeydb.drop(txn);
     }
 
-    saveStateEvents(txn, statesdb, stateskeydb, membersdb, eventsDb, room, state.events);
+    std::unique_ptr<cache::StorageTransaction> sqlTxn;
+    if (storage_backend_->isSql()) {
+        try {
+            sqlTxn = storage_backend_->createTransaction();
+        } catch (std::exception &e) {
+            nhlog::db()->error("Failed to create SQL transaction for room {}: {}", room, e.what());
+        }
+    }
+
+    saveStateEvents(txn, statesdb, stateskeydb, membersdb, eventsDb, room, state.events, sqlTxn.get());
 
     RoomInfo updatedInfo;
 
@@ -2199,22 +2208,13 @@ Cache::updateState(const std::string &room, const mtx::responses::StateEvents &s
 
     db->rooms.put(txn, room, nlohmann::json(updatedInfo).dump());
     
-    // Mirror to Postgres if enabled
-    if (UserSettings::instance()->databaseBackend() == UserSettings::DatabaseBackend::PostgreSQL) {
+    // Mirror to SQL if enabled
+    if (sqlTxn) {
          try {
-             auto pgtxn = storage_backend_->createTransaction();
-             storage_backend_->saveRoom(*pgtxn, room, updatedInfo);
-             pgtxn->commit();
+             storage_backend_->saveRoom(*sqlTxn, room, updatedInfo);
+             sqlTxn->commit();
          } catch (std::exception &e) {
-             nhlog::db()->error("Failed to mirror room {} to Postgres: {}", room, e.what());
-         }
-    } else if (UserSettings::instance()->databaseBackend() == UserSettings::DatabaseBackend::SQLite) {
-         try {
-             auto sqltxn = storage_backend_->createTransaction();
-             storage_backend_->saveRoom(*sqltxn, room, updatedInfo);
-             sqltxn->commit();
-         } catch (std::exception &e) {
-             nhlog::db()->error("Failed to mirror room {} to SQLite: {}", room, e.what());
+             nhlog::db()->error("Failed to mirror room {} to SQL: {}", room, e.what());
          }
     }
 
@@ -2512,7 +2512,7 @@ try {
 
     // Create a single SQL transaction for all room mirroring (if using SQL backend)
     std::unique_ptr<cache::StorageTransaction> sqlTxn;
-    if (UserSettings::instance()->databaseBackend() != UserSettings::DatabaseBackend::LMDB) {
+    if (storage_backend_->isSql()) {
         nhlog::db()->debug("Creating batched SQL transaction for mirroring");
         try {
             sqlTxn = storage_backend_->createTransaction();
@@ -4153,6 +4153,61 @@ Cache::saveTimelineMessages(lmdb::txn &txn,
         if (sqlTxn) {
             try {
                 storage_backend_->saveEvent(*sqlTxn, event_id_val, room_id, event.dump());
+
+                // Media metadata extraction
+                std::visit(
+                  [this, sqlTxn, &event_id_val, &room_id](const auto &ev) {
+                      using EventT = std::remove_cvref_t<decltype(ev)>;
+                      if constexpr (std::is_same_v<EventT,
+                                                   mtx::events::RoomEvent<mtx::events::msg::Image>>) {
+                          storage_backend_->saveMediaMetadata(*sqlTxn,
+                                                              event_id_val,
+                                                              room_id,
+                                                              ev.content.body,
+                                                              ev.content.info.mimetype,
+                                                              ev.content.info.size,
+                                                              (int)ev.content.info.w,
+                                                              (int)ev.content.info.h,
+                                                              ev.content.info.blurhash);
+                      } else if constexpr (std::is_same_v<
+                                             EventT,
+                                             mtx::events::RoomEvent<mtx::events::msg::Video>>) {
+                          storage_backend_->saveMediaMetadata(*sqlTxn,
+                                                              event_id_val,
+                                                              room_id,
+                                                              ev.content.body,
+                                                              ev.content.info.mimetype,
+                                                              ev.content.info.size,
+                                                              (int)ev.content.info.w,
+                                                              (int)ev.content.info.h,
+                                                              ev.content.info.blurhash);
+                      } else if constexpr (std::is_same_v<
+                                             EventT,
+                                             mtx::events::RoomEvent<mtx::events::msg::Audio>>) {
+                          storage_backend_->saveMediaMetadata(*sqlTxn,
+                                                              event_id_val,
+                                                              room_id,
+                                                              ev.content.body,
+                                                              ev.content.info.mimetype,
+                                                              ev.content.info.size,
+                                                              0,
+                                                              0,
+                                                              "");
+                      } else if constexpr (std::is_same_v<
+                                             EventT,
+                                             mtx::events::RoomEvent<mtx::events::msg::File>>) {
+                          storage_backend_->saveMediaMetadata(*sqlTxn,
+                                                              event_id_val,
+                                                              room_id,
+                                                              ev.content.body,
+                                                              ev.content.info.mimetype,
+                                                              ev.content.info.size,
+                                                              0,
+                                                              0,
+                                                              "");
+                      }
+                  },
+                  e);
             } catch (std::exception &e) {
                 nhlog::db()->warn("Failed to mirror event {} to SQL: {}", event_id_val, e.what());
             }
@@ -4303,19 +4358,19 @@ Cache::saveOldMessages(const std::string &room_id, const mtx::responses::Message
 {
     auto txn         = lmdb::txn::begin(db->env_);
     auto eventsDb    = getEventsDb(txn, room_id);
-    auto relationsDb = getRelationsDb(txn, room_id);
-
+    // Create a single SQL transaction for backfill mirroring
     std::unique_ptr<cache::StorageTransaction> sqlTxn;
-    if (UserSettings::instance()->databaseBackend() != UserSettings::DatabaseBackend::LMDB) {
+    if (storage_backend_->isSql()) {
         try {
             sqlTxn = storage_backend_->createTransaction();
         } catch (std::exception &e) {
-            nhlog::db()->warn("Failed to create SQL transaction for old messages: {}", e.what());
+            nhlog::db()->error("Failed to create SQL transaction for backfill: {}", e.what());
         }
     }
 
     auto orderDb     = getEventOrderDb(txn, room_id);
     auto evToOrderDb = getEventToOrderDb(txn, room_id);
+    auto relationsDb = getRelationsDb(txn, room_id); // Moved this line here
     auto msg2orderDb = getMessageToOrderDb(txn, room_id);
     auto order2msgDb = getOrderToMessageDb(txn, room_id);
 

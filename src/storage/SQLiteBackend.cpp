@@ -78,17 +78,75 @@ void SQLiteBackend::initializeSchema() {
         "CREATE TABLE IF NOT EXISTS room_members (room_id TEXT, user_id TEXT, info TEXT, membership TEXT, PRIMARY KEY(room_id, user_id));",
         "CREATE TABLE IF NOT EXISTS events (event_id TEXT PRIMARY KEY, room_id TEXT, idx INTEGER, body TEXT);",
         "CREATE INDEX IF NOT EXISTS idx_events_room ON events(room_id, idx);",
-        "CREATE TABLE IF NOT EXISTS state_events (room_id TEXT, type TEXT, state_key TEXT, event_id TEXT, PRIMARY KEY(room_id, type, state_key));"
+        "CREATE TABLE IF NOT EXISTS state_events (room_id TEXT, type TEXT, state_key TEXT, event_id TEXT, PRIMARY KEY(room_id, type, state_key));",
+        "CREATE TABLE IF NOT EXISTS media_metadata (event_id TEXT PRIMARY KEY, room_id TEXT, filename TEXT, mimetype TEXT, size INTEGER, width INTEGER, height INTEGER, blurhash TEXT);",
+        "CREATE VIRTUAL TABLE IF NOT EXISTS media_search USING fts5(filename, tokenize='trigram');"
     };
     
     char* errMsg = nullptr;
     for (const auto& query : ddl) {
         if (sqlite3_exec(db_, query, nullptr, nullptr, &errMsg) != SQLITE_OK) {
-            std::string err = errMsg ? errMsg : "Unknown error";
+            std::string sql_err = errMsg ? errMsg : "Unknown error";
             sqlite3_free(errMsg);
-            throw std::runtime_error("Schema initialization failed: " + err);
+            
+            if (sql_err.find("trigram") != std::string::npos) {
+                nhlog::db()->warn("trigram tokenizer not supported, falling back to simple");
+                sqlite3_exec(db_, "CREATE VIRTUAL TABLE IF NOT EXISTS media_search USING fts5(filename);", nullptr, nullptr, nullptr);
+            } else {
+                throw std::runtime_error("Schema initialization failed: " + sql_err);
+            }
         }
     }
+}
+
+void SQLiteBackend::saveMediaMetadata(StorageTransaction& txn,
+                                      const std::string& eventId,
+                                      const std::string& roomId,
+                                      const std::string& filename,
+                                      const std::string& mimetype,
+                                      int64_t size,
+                                      int width,
+                                      int height,
+                                      const std::string& blurhash) {
+    auto db = static_cast<SQLiteTransaction&>(txn).get();
+    sqlite3_stmt* stmt;
+    
+    const char* sql = "INSERT OR REPLACE INTO media_metadata (event_id, room_id, filename, mimetype, size, width, height, blurhash) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+    
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        throw std::runtime_error("Failed to prepare saveMediaMetadata statement: " + std::string(sqlite3_errmsg(db)));
+    }
+    
+    sqlite3_bind_text(stmt, 1, eventId.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, roomId.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 3, filename.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 4, mimetype.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_int64(stmt, 5, size);
+    sqlite3_bind_int(stmt, 6, width);
+    sqlite3_bind_int(stmt, 7, height);
+    sqlite3_bind_text(stmt, 8, blurhash.c_str(), -1, SQLITE_STATIC);
+    
+    if (sqlite3_step(stmt) != SQLITE_DONE) {
+        std::string err = sqlite3_errmsg(db);
+        sqlite3_finalize(stmt);
+        throw std::runtime_error("Failed to save media metadata: " + err);
+    }
+    sqlite3_finalize(stmt);
+    
+    const char* fts_sql = "INSERT OR REPLACE INTO media_search(rowid, filename) VALUES ((SELECT rowid FROM media_metadata WHERE event_id = ?), ?)";
+    if (sqlite3_prepare_v2(db, fts_sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        throw std::runtime_error("Failed to prepare media_search statement: " + std::string(sqlite3_errmsg(db)));
+    }
+    
+    sqlite3_bind_text(stmt, 1, eventId.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, filename.c_str(), -1, SQLITE_STATIC);
+    
+    if (sqlite3_step(stmt) != SQLITE_DONE) {
+        std::string err = sqlite3_errmsg(db);
+        sqlite3_finalize(stmt);
+        throw std::runtime_error("Failed to update media search index: " + err);
+    }
+    sqlite3_finalize(stmt);
 }
 
 std::unique_ptr<StorageTransaction> SQLiteBackend::createTransaction() {
@@ -104,15 +162,16 @@ void SQLiteBackend::saveRoom(StorageTransaction& txn, const std::string& roomId,
     const char* sql = "INSERT INTO rooms (room_id, info) VALUES (?, ?) ON CONFLICT(room_id) DO UPDATE SET info=excluded.info";
     
     if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) {
-         // Log error
-         return;
+        throw std::runtime_error("Failed to prepare saveRoom statement: " + std::string(sqlite3_errmsg(db)));
     }
     
     sqlite3_bind_text(stmt, 1, roomId.c_str(), -1, SQLITE_STATIC);
     sqlite3_bind_text(stmt, 2, json.c_str(), -1, SQLITE_STATIC);
     
     if (sqlite3_step(stmt) != SQLITE_DONE) {
-        // Log error
+        std::string err = sqlite3_errmsg(db);
+        sqlite3_finalize(stmt);
+        throw std::runtime_error("Failed to save room: " + err);
     }
     
     sqlite3_finalize(stmt);
@@ -125,7 +184,7 @@ std::optional<RoomInfo> SQLiteBackend::getRoom(StorageTransaction& txn, const st
     const char* sql = "SELECT info FROM rooms WHERE room_id = ?";
     
     if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) {
-         return std::nullopt;
+        throw std::runtime_error("Failed to prepare getRoom statement: " + std::string(sqlite3_errmsg(db)));
     }
     
     sqlite3_bind_text(stmt, 1, roomId.c_str(), -1, SQLITE_STATIC);
@@ -149,12 +208,14 @@ std::vector<std::string> SQLiteBackend::getRoomIds(StorageTransaction& txn) {
     sqlite3_stmt* stmt;
     const char* sql = "SELECT room_id FROM rooms";
     
-    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
-        while (sqlite3_step(stmt) == SQLITE_ROW) {
-            rooms.emplace_back(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0)));
-        }
-        sqlite3_finalize(stmt);
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        throw std::runtime_error("Failed to prepare getRoomIds statement: " + std::string(sqlite3_errmsg(db)));
     }
+    
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        rooms.emplace_back(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0)));
+    }
+    sqlite3_finalize(stmt);
     
     return rooms;
 }

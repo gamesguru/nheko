@@ -13,6 +13,7 @@ public:
     ~SQLiteBackend() override;
 
     std::unique_ptr<StorageTransaction> createTransaction() override;
+    bool isSql() const override { return true; }
 
     void saveRoom(StorageTransaction& txn, const std::string& roomId, const RoomInfo& info) override;
     std::optional<RoomInfo> getRoom(StorageTransaction& txn, const std::string& roomId) override;

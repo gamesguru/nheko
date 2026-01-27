@@ -179,4 +179,24 @@ void PostgresBackend::saveMember(StorageTransaction& txn,
     (void)membership;
 }
 
+void PostgresBackend::saveMediaMetadata(StorageTransaction& txn,
+                                        const std::string& eventId,
+                                        const std::string& roomId,
+                                        const std::string& filename,
+                                        const std::string& mimetype,
+                                        int64_t size,
+                                        int width,
+                                        int height,
+                                        const std::string& blurhash) {
+    (void)txn;
+    (void)eventId;
+    (void)roomId;
+    (void)filename;
+    (void)mimetype;
+    (void)size;
+    (void)width;
+    (void)height;
+    (void)blurhash;
+}
+
 } // namespace cache
