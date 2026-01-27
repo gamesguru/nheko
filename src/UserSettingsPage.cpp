@@ -1640,11 +1640,11 @@ UserSettingsModel::data(const QModelIndex &index, int role) const
         case IgnoredUsers:
             return tr("Manage your ignored users.");
         case StorageSection:
-            return tr("Storage");
+            return tr("Backend Database");
         case UsePostgres:
-            return tr("Storage Backend");
+            return tr("Database Type");
         case PostgresUrl:
-            return tr("Connection URL for PostgreSQL (e.g. postgresql://user:pass@localhost:5432/nheko)");
+            return tr("Database URL");
         case DatabaseHealth:
             return tr("Check if the database connection is working.");
         }
@@ -1806,11 +1806,20 @@ UserSettingsModel::data(const QModelIndex &index, int role) const
               QStringLiteral("Dark"),
               QStringLiteral("System"),
             };
-        case UsePostgres:
+        case UsePostgres: {
+#ifdef NHEKO_POSTGRES_SUPPORT
              return QStringList{
-                 QStringLiteral("LMDB"),
-                 QStringLiteral("PostgreSQL"),
+                 QStringLiteral("LMDB (v1)"),
+                 QStringLiteral("PostgreSQL (v2)"),
+                 QStringLiteral("SQLite (v2)"),
              };
+#else
+             return QStringList{
+                 QStringLiteral("LMDB (v1)"),
+                 QStringLiteral("SQLite (v2)"),
+             };
+#endif
+        }
         case LogLevel:
             return QStringList{
               QStringLiteral("trace"),
@@ -2312,10 +2321,20 @@ UserSettingsModel::setData(const QModelIndex &index, const QVariant &value, int 
         }
         case UsePostgres: {
              auto idx = value.toInt();
-             if (idx >= 0 && idx <= 2) { // 0=LMDB, 1=Postgres, 2=SQLite
-                 i->setDatabaseBackend(static_cast<UserSettings::DatabaseBackend>(idx));
-                 return true;
+#ifdef NHEKO_POSTGRES_SUPPORT
+             // Dropdown: 0=LMDB, 1=PostgreSQL, 2=SQLite
+             switch (idx) {
+                 case 0: i->setDatabaseBackend(UserSettings::DatabaseBackend::LMDB); return true;
+                 case 1: i->setDatabaseBackend(UserSettings::DatabaseBackend::PostgreSQL); return true;
+                 case 2: i->setDatabaseBackend(UserSettings::DatabaseBackend::SQLite); return true;
              }
+#else
+             // Dropdown: 0=LMDB, 1=SQLite (Postgres not shown)
+             switch (idx) {
+                 case 0: i->setDatabaseBackend(UserSettings::DatabaseBackend::LMDB); return true;
+                 case 1: i->setDatabaseBackend(UserSettings::DatabaseBackend::SQLite); return true;
+             }
+#endif
              return false;
         }
         case PostgresUrl: {

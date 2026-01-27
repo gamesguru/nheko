@@ -435,13 +435,14 @@ Cache::Cache(const QString &userId, QObject *parent)
         storage_backend_ = std::make_unique<cache::PostgresBackend>(settings->postgresUrl().toStdString());
     } else
 #endif
-    if (settings->databaseBackend() == UserSettings::DatabaseBackend::LMDB) {
-        nhlog::db()->info("Using v1 storage with LMDB backend");
-        storage_backend_ = std::make_unique<cache::LMDBBackend>(db.get());
-    } else {
+    if (settings->databaseBackend() == UserSettings::DatabaseBackend::SQLite) {
         auto sqlitePath = (QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/nheko.sqlite").toStdString();
         nhlog::db()->info("Using v2 storage with SQLite backend at: {}", sqlitePath);
         storage_backend_ = std::make_unique<cache::SQLiteBackend>(sqlitePath);
+    } else {
+        // Default to LMDB (v1) for stability
+        nhlog::db()->info("Using v1 storage with LMDB backend");
+        storage_backend_ = std::make_unique<cache::LMDBBackend>(db.get());
     }
 }
 

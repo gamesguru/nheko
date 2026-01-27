@@ -176,9 +176,9 @@ public:
 
     enum class DatabaseBackend
     {
-        LMDB,
-        PostgreSQL,
-        SQLite,
+        LMDB = 0,
+        SQLite = 10,
+        PostgreSQL = 11,
     };
     Q_ENUM(DatabaseBackend)
 
