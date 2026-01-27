@@ -50,6 +50,15 @@ public:
                             const std::string& userId,
                             const std::string& memberInfoJson,
                             const std::string& membership) = 0;
+    virtual void saveMediaMetadata(StorageTransaction& txn,
+                                   const std::string& eventId,
+                                   const std::string& roomId,
+                                   const std::string& filename,
+                                   const std::string& mimetype,
+                                   int64_t size,
+                                   int width,
+                                   int height,
+                                   const std::string& blurhash) = 0;
 
     // ... (We will populate this iteratively as we migrate methods)
 };

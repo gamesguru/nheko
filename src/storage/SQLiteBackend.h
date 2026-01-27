@@ -30,6 +30,15 @@ public:
                     const std::string& userId,
                     const std::string& memberInfoJson,
                     const std::string& membership) override;
+    void saveMediaMetadata(StorageTransaction& txn,
+                           const std::string& eventId,
+                           const std::string& roomId,
+                           const std::string& filename,
+                           const std::string& mimetype,
+                           int64_t size,
+                           int width,
+                           int height,
+                           const std::string& blurhash) override;
 
 private:
     void initializeSchema();
