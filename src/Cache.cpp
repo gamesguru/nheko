@@ -426,22 +426,23 @@ Cache::Cache(const QString &userId, QObject *parent)
     auto settings = UserSettings::instance();
     
     // Initialize storage backend
-#ifdef NHEKO_POSTGRES_SUPPORT
     nhlog::db()->info(
         "Selected database backend: {}", static_cast<int>(settings->databaseBackend()));
+
+#ifdef NHEKO_POSTGRES_SUPPORT
     if (settings->databaseBackend() == UserSettings::DatabaseBackend::PostgreSQL) {
         storage_backend_ = std::make_unique<cache::PostgresBackend>(settings->postgresUrl().toStdString());
-    } else if (settings->databaseBackend() == UserSettings::DatabaseBackend::SQLite) {
+    } else 
+#endif
+    if (settings->databaseBackend() == UserSettings::DatabaseBackend::SQLite) {
         storage_backend_ = std::make_unique<cache::SQLiteBackend>(
             (QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/nheko.sqlite").toStdString());
     } else {
+        if (settings->databaseBackend() == UserSettings::DatabaseBackend::PostgreSQL)
+             nhlog::db()->warn("Postgres selected but not compiled in. Falling back to LMDB.");
+        
         storage_backend_ = std::make_unique<cache::LMDBBackend>(db.get());
     }
-#else
-    nhlog::db()->info(
-        "Compiled without NHEKO_POSTGRES_SUPPORT. Selected database backend: LMDB");
-    storage_backend_ = std::make_unique<cache::LMDBBackend>(db.get());
-#endif
 }
 
 static QString
@@ -2619,10 +2620,15 @@ try {
 
             // Mirror to SQL backend if enabled
             if (UserSettings::instance()->databaseBackend() != UserSettings::DatabaseBackend::LMDB) {
+                 nhlog::db()->debug("Mirroring room {} to SQL backend", room.first);
                  try {
+                     nhlog::db()->debug("Creating SQL transaction for mirroring");
                      auto sqlTxn = storage_backend_->createTransaction();
+                     nhlog::db()->debug("SQL transaction created, saving room");
                      storage_backend_->saveRoom(*sqlTxn, room.first, updatedInfo);
+                     nhlog::db()->debug("Room saved, committing SQL transaction");
                      sqlTxn->commit();
+                     nhlog::db()->debug("SQL transaction committed");
                  } catch (std::exception &e) {
                      nhlog::db()->error("Failed to mirror room {} to storage backend: {}", room.first, e.what());
                  }
