@@ -111,7 +111,7 @@ Page {
                     acceptedDevices: PointerDevice.Mouse | PointerDevice.Stylus | PointerDevice.TouchPad
                     gesturePolicy: TapHandler.ReleaseWithinBounds
 
-                    onSingleTapped: communityContextMenu.show(communityItem, model.id, model.hidden, model.muted)
+                    onSingleTapped: (eventPoint) => communityContextMenu.show(communityItem, model.id, model.hidden, model.muted)
                 }
             }
             RowLayout {
@@ -202,11 +202,11 @@ Page {
             property bool muted
             property string tagId
 
-            function show(parent, id_, hidden_, muted_) {
+            function show(p, id_, hidden_, muted_) {
                 tagId = id_;
                 hidden = hidden_;
                 muted = muted_;
-                popup(parent);
+                popup(p);
             }
 
             Component.onCompleted: {

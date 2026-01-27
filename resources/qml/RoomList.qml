@@ -544,9 +544,9 @@ Page {
                     acceptedDevices: PointerDevice.Mouse | PointerDevice.Stylus | PointerDevice.TouchPad
                     gesturePolicy: TapHandler.ReleaseWithinBounds
 
-                    onSingleTapped: {
+                    onSingleTapped: (eventPoint) => {
                         if (!TimelineManager.isInvite)
-                            roomContextMenu.show(roomItemTh.parent, roomId, tags);
+                            roomContextMenu.show(roomItem, roomId, tags);
                     }
                 }
             }
@@ -734,10 +734,10 @@ Page {
             property string roomid
             property var tags
 
-            function show(parent, roomid_, tags_) {
+            function show(p, roomid_, tags_) {
                 roomid = roomid_;
                 tags = tags_;
-                popup(parent);
+                popup(p);
             }
 
             Component.onCompleted: {
