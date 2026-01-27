@@ -525,7 +525,7 @@ Page {
             }
             onPressAndHold: {
                 if (!isInvite)
-                    roomContextMenu.show(roomItem, roomId, tags);
+                    roomContextMenu.show(this, roomId, tags);
             }
 
             Ripple {
@@ -546,7 +546,7 @@ Page {
 
                     onSingleTapped: (eventPoint) => {
                         if (!TimelineManager.isInvite)
-                            roomContextMenu.show(roomItem, roomId, tags);
+                            roomContextMenu.show(this.parent.parent, roomId, tags);
                     }
                 }
             }

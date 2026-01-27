@@ -100,7 +100,7 @@ Page {
             ]
 
             onClicked: Communities.setCurrentTagId(model.id)
-            onPressAndHold: communityContextMenu.show(communityItem, model.id, model.hidden, model.muted)
+            onPressAndHold: communityContextMenu.show(this, model.id, model.hidden, model.muted)
 
             Item {
                 anchors.fill: parent
@@ -111,7 +111,7 @@ Page {
                     acceptedDevices: PointerDevice.Mouse | PointerDevice.Stylus | PointerDevice.TouchPad
                     gesturePolicy: TapHandler.ReleaseWithinBounds
 
-                    onSingleTapped: (eventPoint) => communityContextMenu.show(communityItem, model.id, model.hidden, model.muted)
+                    onSingleTapped: (eventPoint) => communityContextMenu.show(this.parent.parent, model.id, model.hidden, model.muted)
                 }
             }
             RowLayout {

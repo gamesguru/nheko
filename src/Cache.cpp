@@ -98,23 +98,6 @@ static constexpr auto ENCRYPTED_ROOMS_DB("encrypted_rooms");
 //! Expiration progress for each room
 static constexpr auto EVENT_EXPIRATION_BG_JOB_DB("event_expiration_bg_job");
 
-static std::string
-membershipToString(mtx::events::state::Membership membership)
-{
-    switch (membership) {
-    case mtx::events::state::Membership::Join:
-        return "join";
-    case mtx::events::state::Membership::Invite:
-        return "invite";
-    case mtx::events::state::Membership::Leave:
-        return "leave";
-    case mtx::events::state::Membership::Ban:
-        return "ban";
-    case mtx::events::state::Membership::Knock:
-        return "knock";
-    }
-    return "leave";
-}
 
 //! room_id -> pickled OlmInboundGroupSession
 static constexpr auto INBOUND_MEGOLM_SESSIONS_DB("inbound_megolm_sessions");
