@@ -98,6 +98,24 @@ static constexpr auto ENCRYPTED_ROOMS_DB("encrypted_rooms");
 //! Expiration progress for each room
 static constexpr auto EVENT_EXPIRATION_BG_JOB_DB("event_expiration_bg_job");
 
+static std::string
+membershipToString(mtx::events::state::Membership membership)
+{
+    switch (membership) {
+    case mtx::events::state::Membership::Join:
+        return "join";
+    case mtx::events::state::Membership::Invite:
+        return "invite";
+    case mtx::events::state::Membership::Leave:
+        return "leave";
+    case mtx::events::state::Membership::Ban:
+        return "ban";
+    case mtx::events::state::Membership::Knock:
+        return "knock";
+    }
+    return "leave";
+}
+
 //! room_id -> pickled OlmInboundGroupSession
 static constexpr auto INBOUND_MEGOLM_SESSIONS_DB("inbound_megolm_sessions");
 //! MegolmSessionIndex -> pickled OlmOutboundGroupSession
@@ -2374,7 +2392,7 @@ Cache::saveStateEvent(lmdb::txn &txn,
 
             if (sqlTxn) {
                 try {
-                    storage_backend_->saveMember(*sqlTxn, room_id, e->state_key, memberJson, nlohmann::json(e->content.membership).get<std::string>());
+                    storage_backend_->saveMember(*sqlTxn, room_id, e->state_key, memberJson, membershipToString(e->content.membership));
                 } catch (std::exception &ex) {
                     nhlog::db()->warn("Failed to save member to SQL: {}", ex.what());
                 }
@@ -2397,7 +2415,7 @@ Cache::saveStateEvent(lmdb::txn &txn,
                       e->content.is_direct,
                     };
 
-                    storage_backend_->saveMember(*sqlTxn, room_id, e->state_key, nlohmann::json(tmp).dump(), nlohmann::json(e->content.membership).get<std::string>());
+                    storage_backend_->saveMember(*sqlTxn, room_id, e->state_key, nlohmann::json(tmp).dump(), membershipToString(e->content.membership));
                 } catch (std::exception &ex) {
                     nhlog::db()->warn("Failed to soft-delete member from SQL: {}", ex.what());
                 }

@@ -213,9 +213,9 @@ EventDelegateChooser {
             Button {
                 Layout.alignment: Qt.AlignHCenter
                 text: qsTr("Allow them in")
-                visible: member.room.showAcceptKnockButton(member.eventId)
+                visible: member.room && member.room.showAcceptKnockButton(member.eventId)
 
-                onClicked: member.room.acceptKnock(member.eventId)
+                onClicked: if (member.room) member.room.acceptKnock(member.eventId)
             }
         }
     }
