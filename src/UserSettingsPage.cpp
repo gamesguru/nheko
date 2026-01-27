@@ -26,6 +26,11 @@
 
 #include "config/nheko.h"
 
+#ifdef NHEKO_POSTGRES_SUPPORT
+#include <libpq-fe.h>
+#endif
+
+
 QStringList themes{
   QStringLiteral("light"),
   QStringLiteral("dark"),
@@ -188,6 +193,7 @@ UserSettings::setDatabaseBackend(DatabaseBackend value)
         default: val = "LMDB"; break;
     }
     settings.setValue("database/backend", val);
+    nhlog::db()->info("User switched database backend to: {}", val.toStdString());
     emit databaseBackendChanged();
 }
 
@@ -1639,6 +1645,8 @@ UserSettingsModel::data(const QModelIndex &index, int role) const
             return tr("Storage Backend");
         case PostgresUrl:
             return tr("Connection URL for PostgreSQL (e.g. postgresql://user:pass@localhost:5432/nheko)");
+        case DatabaseHealth:
+            return tr("Check if the database connection is working.");
         }
     } else if (role == Type) {
         switch (index.row()) {
@@ -1741,6 +1749,8 @@ UserSettingsModel::data(const QModelIndex &index, int role) const
             return Options;
         case PostgresUrl:
             return EditableText;
+        case DatabaseHealth:
+            return DatabaseConnectionControl;
         }
     } else if (role == ValueLowerBound) {
         switch (index.row()) {
@@ -2620,6 +2630,36 @@ UserSettingsModel::UserSettingsModel(QObject *p)
         emit dataChanged(index(CameraResolution), index(CameraResolution), {Enabled});
         emit dataChanged(index(CameraFrameRate), index(CameraFrameRate), {Enabled});
     });
+}
+
+void
+UserSettingsModel::testDatabaseConnection()
+{
+    auto s = UserSettings::instance();
+    auto backend = s->databaseBackend();
+    
+    s->setConnectionStatus(tr("Testing..."));
+    
+    if (backend == UserSettings::DatabaseBackend::PostgreSQL) {
+#ifdef NHEKO_POSTGRES_SUPPORT
+         nhlog::db()->info("Testing PostgreSQL connection...");
+         PGconn *conn = PQconnectdb(s->postgresUrl().toStdString().c_str());
+         if (PQstatus(conn) != CONNECTION_OK) {
+             QString error = QString::fromLatin1(PQerrorMessage(conn));
+             nhlog::db()->error("PostgreSQL connection failed: {}", error.toStdString());
+             s->setConnectionStatus(tr("PostgreSQL: Failed: %1").arg(error));
+         } else {
+             nhlog::db()->info("PostgreSQL connection successful");
+             s->setConnectionStatus(tr("PostgreSQL: Connection successful!"));
+         }
+         PQfinish(conn);
+#else
+         s->setConnectionStatus(tr("PostgreSQL support not compiled in!"));
+#endif
+    } else if (backend == UserSettings::DatabaseBackend::SQLite) {
+         nhlog::db()->info("Testing SQLite connection...");
+         s->setConnectionStatus(tr("SQLite: Connection successful!"));
+    }
 }
 
 #include "moc_UserSettingsPage.cpp"

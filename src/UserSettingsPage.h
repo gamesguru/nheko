@@ -115,6 +115,8 @@ class UserSettings final : public QObject
     Q_PROPERTY(bool openVideoExternal READ openVideoExternal WRITE setOpenVideoExternal NOTIFY
                  openVideoExternalChanged)
     Q_PROPERTY(QString logLevel READ logLevel WRITE setLogLevel NOTIFY logLevelChanged)
+    Q_PROPERTY(QString connectionStatus READ connectionStatus NOTIFY connectionStatusChanged)
+
 
     Q_PROPERTY(QStringList hiddenPins READ hiddenPins WRITE setHiddenPins NOTIFY hiddenPinsChanged)
     Q_PROPERTY(QStringList recentReactions READ recentReactions WRITE setRecentReactions NOTIFY
@@ -261,6 +263,16 @@ public:
 
     QString postgresUrl() const;
     void setPostgresUrl(QString value);
+
+
+    QString connectionStatus() const { return connectionStatus_; }
+    void setConnectionStatus(QString status)
+    {
+        if (connectionStatus_ != status) {
+            connectionStatus_ = status;
+            emit connectionStatusChanged();
+        }
+    }
 
     QString theme() const { return !theme_.isEmpty() ? theme_ : defaultTheme_; }
     bool messageHoverHighlight() const { return messageHoverHighlight_; }
@@ -414,6 +426,7 @@ signals:
     void logLevelChanged(QString level);
     void databaseBackendChanged();
     void postgresUrlChanged();
+    void connectionStatusChanged();
 
 private:
     // Default to system theme if QT_QPA_PLATFORMTHEME var is set.
@@ -494,6 +507,7 @@ private:
     bool expireEvents_;
     bool mildKeyWarning_;
     QString logLevel_;
+    QString connectionStatus_ = "Unknown"; // Default status
 
     QSettings settings;
 
@@ -604,6 +618,8 @@ class UserSettingsModel : public QAbstractListModel
         StorageSection,
         UsePostgres,
         PostgresUrl,
+        DatabaseHealth,
+
 
         COUNT,
         // hidden for now
@@ -634,7 +650,9 @@ public:
         DeviceOptions,
         RescanDevs,
         EditableText,
+        DatabaseConnectionControl,
     };
+
     Q_ENUM(Types);
 
     enum Roles
@@ -666,4 +684,6 @@ public:
     Q_INVOKABLE void requestCrossSigningSecrets();
     Q_INVOKABLE void downloadCrossSigningSecrets();
     Q_INVOKABLE void refreshDevices();
+    Q_INVOKABLE void testDatabaseConnection();
 };
+

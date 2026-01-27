@@ -128,6 +128,20 @@ Rectangle {
                             }
                         }
                         DelegateChoice {
+                            roleValue: UserSettingsModel.DatabaseConnectionControl
+                            RowLayout {
+                                Button {
+                                    text: qsTr("TEST CONNECTION")
+                                    onClicked: UserSettingsModel.testDatabaseConnection()
+                                }
+                                Label {
+                                    text: "Status: " + Settings.connectionStatus
+                                    color: palette.text
+                                }
+
+                            }
+                        }
+                        DelegateChoice {
                             roleValue: UserSettingsModel.Integer
 
                             SpinBox {
