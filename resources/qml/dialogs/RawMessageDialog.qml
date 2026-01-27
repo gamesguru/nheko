@@ -17,7 +17,7 @@ ApplicationWindow {
     flags: Qt.Tool | Qt.WindowStaysOnTopHint | Qt.WindowCloseButtonHint | Qt.WindowTitleHint
 
     Shortcut {
-        sequence: StandardKey.Cancel
+        sequences: [StandardKey.Cancel]
         onActivated: rawMessageRoot.close()
     }
 
@@ -33,8 +33,6 @@ ApplicationWindow {
             color: palette.text
             readOnly: true
             textFormat: Text.PlainText
-
-            anchors.fill: parent
 
             background: Rectangle {
                 color: palette.base

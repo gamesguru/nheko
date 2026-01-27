@@ -12,23 +12,18 @@ class SQLiteTransaction : public StorageTransaction {
 public:
     SQLiteTransaction(sqlite3* db) : db_(db) {
         char* errMsg = nullptr;
-        nhlog::db()->debug("SQLite: Beginning transaction");
         if (sqlite3_exec(db_, "BEGIN", nullptr, nullptr, &errMsg) != SQLITE_OK) {
             std::string err = errMsg ? errMsg : "Unknown error";
             sqlite3_free(errMsg);
             nhlog::db()->error("SQLite: Failed to start transaction: {}", err);
             throw std::runtime_error("Failed to start transaction: " + err);
         }
-        nhlog::db()->debug("SQLite: Transaction started");
     }
-    
-    ~SQLiteTransaction() override { 
+    ~SQLiteTransaction() override {
         if (!committed_) {
-            nhlog::db()->debug("SQLite: Rolling back transaction");
             char* errMsg = nullptr;
             sqlite3_exec(db_, "ROLLBACK", nullptr, nullptr, &errMsg);
             sqlite3_free(errMsg);
-            nhlog::db()->debug("SQLite: Transaction saved/rolled back");
         }
     }
     
@@ -61,8 +56,25 @@ SQLiteBackend::SQLiteBackend(const std::string& dbPath) {
         throw std::runtime_error("Failed to open SQLite database: " + err);
     }
 
-    // waiting for up to 10s to get the lock
-    sqlite3_busy_timeout(db_, 10000);
+    // Performance tuning
+    const char* performance_ddl[] = {
+        "PRAGMA journal_mode=WAL;",
+        "PRAGMA synchronous=NORMAL;",
+        "PRAGMA cache_size=-64000;", // 64MB cache
+        "PRAGMA temp_store=MEMORY;",
+        "PRAGMA mmap_size=30000000000;", // Use mmap if possible
+    };
+
+    for (const auto& pragma : performance_ddl) {
+        char* errMsg = nullptr;
+        if (sqlite3_exec(db_, pragma, nullptr, nullptr, &errMsg) != SQLITE_OK) {
+            nhlog::db()->warn("SQLite: Failed to set {}: {}", pragma, errMsg ? errMsg : "unknown error");
+            sqlite3_free(errMsg);
+        }
+    }
+
+    // waiting for up to 15s to get the lock
+    sqlite3_busy_timeout(db_, 15000);
 
     initializeSchema();
 }

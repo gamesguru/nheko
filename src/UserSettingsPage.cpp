@@ -1272,6 +1272,12 @@ UserSettingsModel::data(const QModelIndex &index, int role) const
             return tr("Periodically delete expired events");
         case StorageSection:
             return tr("STORAGE");
+        case UsePostgres:
+            return tr("Backend Database");
+        case PostgresUrl:
+            return tr("Database URL");
+        case DatabaseHealth:
+            return tr("Database Connection Status");
         }
     } else if (role == Value) {
         switch (index.row()) {

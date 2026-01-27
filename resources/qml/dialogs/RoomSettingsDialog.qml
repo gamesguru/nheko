@@ -20,14 +20,14 @@ ApplicationWindow {
     minimumHeight: 450
     width: 450
     height: 680
-    Layout.preferredWidth: scroll.availableWidth
+    Layout.preferredWidth: 450
     color: palette.window
     modality: Qt.NonModal
     flags: Qt.Dialog | Qt.WindowCloseButtonHint | Qt.WindowTitleHint
     title: qsTr("Room Settings")
 
     Shortcut {
-        sequence: StandardKey.Cancel
+        sequences: [StandardKey.Cancel]
         onActivated: roomSettingsDialog.close()
     }
 
