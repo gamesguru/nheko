@@ -18,14 +18,14 @@ public:
         }
         PQclear(res);
     }
-    
+
     ~PostgresTransaction() override { 
         if (!committed_) {
             auto res = PQexec(conn_, "ROLLBACK");
             PQclear(res);
         }
     }
-    
+
     void commit() override {
         auto res = PQexec(conn_, "COMMIT");
         if (PQresultStatus(res) != PGRES_COMMAND_OK) {
@@ -35,7 +35,7 @@ public:
         PQclear(res);
         committed_ = true;
     }
-    
+
     PGconn* get() { return conn_; }
 
 private:
@@ -46,14 +46,14 @@ private:
 PostgresBackend::PostgresBackend(const std::string& connectionUrl) 
     : connectionUrl_(connectionUrl) {
     nhlog::db()->info("Initializing PostgresBackend with url: {}", connectionUrl);
-    
+
     conn_ = PQconnectdb(connectionUrl.c_str());
     if (PQstatus(conn_) != CONNECTION_OK) {
         std::string err = PQerrorMessage(conn_);
         PQfinish(conn_);
         throw std::runtime_error("Connection to database failed: " + err);
     }
-    
+
     initializeSchema();
 }
 
@@ -69,7 +69,7 @@ void PostgresBackend::initializeSchema() {
         "CREATE TABLE IF NOT EXISTS events (event_id TEXT PRIMARY KEY, room_id TEXT, idx BIGINT, body JSONB);",
         "CREATE INDEX IF NOT EXISTS idx_events_room ON events(room_id, idx);"
     };
-    
+
     for (const auto& query : ddl) {
         auto res = PQexec(conn_, query);
         if (PQresultStatus(res) != PGRES_COMMAND_OK) {
@@ -82,35 +82,38 @@ void PostgresBackend::initializeSchema() {
 }
 
 std::unique_ptr<StorageTransaction> PostgresBackend::createTransaction() {
+    nhlog::db()->debug("Postgres: Creating transaction");
     return std::make_unique<PostgresTransaction>(conn_);
 }
 
 void PostgresBackend::saveRoom(StorageTransaction& txn, const std::string& roomId, const RoomInfo& info) {
+    nhlog::db()->debug("Postgres: Saving room");
     auto conn = static_cast<PostgresTransaction&>(txn).get();
-    
+
     std::string json = nlohmann::json(info).dump();
     const char* paramValues[2] = { roomId.c_str(), json.c_str() };
-    
+
     auto res = PQexecParams(conn,
         "INSERT INTO rooms (room_id, info) VALUES ($1, $2) ON CONFLICT (room_id) DO UPDATE SET info = EXCLUDED.info",
         2, nullptr, paramValues, nullptr, nullptr, 0);
-        
+
     if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+        nhlog::db()->error("Postgres: Failed to save room");
         PQclear(res);
-        // handle error
+        // TODO: handle error
     }
     PQclear(res);
 }
 
 std::optional<RoomInfo> PostgresBackend::getRoom(StorageTransaction& txn, const std::string& roomId) {
     auto conn = static_cast<PostgresTransaction&>(txn).get();
-    
+
     const char* paramValues[1] = { roomId.c_str() };
-    
+
     auto res = PQexecParams(conn,
         "SELECT info FROM rooms WHERE room_id = $1",
         1, nullptr, paramValues, nullptr, nullptr, 0);
-        
+
     if (PQresultStatus(res) == PGRES_TUPLES_OK && PQntuples(res) > 0) {
         std::string jsonStr = PQgetvalue(res, 0, 0);
         PQclear(res);
@@ -120,7 +123,7 @@ std::optional<RoomInfo> PostgresBackend::getRoom(StorageTransaction& txn, const 
             return std::nullopt;
         }
     }
-    
+
     PQclear(res);
     return std::nullopt;
 }
@@ -128,7 +131,7 @@ std::optional<RoomInfo> PostgresBackend::getRoom(StorageTransaction& txn, const 
 std::vector<std::string> PostgresBackend::getRoomIds(StorageTransaction& txn) {
     auto conn = static_cast<PostgresTransaction&>(txn).get();
     std::vector<std::string> rooms;
-    
+
     auto res = PQexec(conn, "SELECT room_id FROM rooms");
     if (PQresultStatus(res) == PGRES_TUPLES_OK) {
         int rows = PQntuples(res);

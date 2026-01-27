@@ -12,28 +12,36 @@ class SQLiteTransaction : public StorageTransaction {
 public:
     SQLiteTransaction(sqlite3* db) : db_(db) {
         char* errMsg = nullptr;
+        nhlog::db()->debug("SQLite: Beginning transaction");
         if (sqlite3_exec(db_, "BEGIN", nullptr, nullptr, &errMsg) != SQLITE_OK) {
             std::string err = errMsg ? errMsg : "Unknown error";
             sqlite3_free(errMsg);
+            nhlog::db()->error("SQLite: Failed to start transaction: {}", err);
             throw std::runtime_error("Failed to start transaction: " + err);
         }
+        nhlog::db()->debug("SQLite: Transaction started");
     }
     
     ~SQLiteTransaction() override { 
         if (!committed_) {
+            nhlog::db()->debug("SQLite: Rolling back transaction");
             char* errMsg = nullptr;
             sqlite3_exec(db_, "ROLLBACK", nullptr, nullptr, &errMsg);
             sqlite3_free(errMsg);
+            nhlog::db()->debug("SQLite: Transaction saved/rolled back");
         }
     }
     
     void commit() override {
         char* errMsg = nullptr;
+        nhlog::db()->debug("SQLite: Committing transaction");
         if (sqlite3_exec(db_, "COMMIT", nullptr, nullptr, &errMsg) != SQLITE_OK) {
             std::string err = errMsg ? errMsg : "Unknown error";
             sqlite3_free(errMsg);
+            nhlog::db()->error("SQLite: Failed to commit transaction: {}", err);
             throw std::runtime_error("Failed to commit transaction: " + err);
         }
+        nhlog::db()->debug("SQLite: Transaction committed");
         committed_ = true;
     }
     
@@ -80,6 +88,7 @@ void SQLiteBackend::initializeSchema() {
 }
 
 std::unique_ptr<StorageTransaction> SQLiteBackend::createTransaction() {
+    nhlog::db()->debug("SQLite: Creating transaction");
     return std::make_unique<SQLiteTransaction>(db_);
 }
 

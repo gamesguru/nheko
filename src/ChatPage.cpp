@@ -747,6 +747,7 @@ ChatPage::startInitialSync()
             nhlog::net()->info("initial sync completed");
             try {
                 cache::client()->saveState(res);
+                nhlog::net()->info("saveState completed");
 
                 olm::handle_to_device_messages(res.to_device.events);
 

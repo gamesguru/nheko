@@ -427,6 +427,8 @@ Cache::Cache(const QString &userId, QObject *parent)
     
     // Initialize storage backend
 #ifdef NHEKO_POSTGRES_SUPPORT
+    nhlog::db()->info(
+        "Selected database backend: {}", static_cast<int>(settings->databaseBackend()));
     if (settings->databaseBackend() == UserSettings::DatabaseBackend::PostgreSQL) {
         storage_backend_ = std::make_unique<cache::PostgresBackend>(settings->postgresUrl().toStdString());
     } else if (settings->databaseBackend() == UserSettings::DatabaseBackend::SQLite) {
@@ -436,6 +438,8 @@ Cache::Cache(const QString &userId, QObject *parent)
         storage_backend_ = std::make_unique<cache::LMDBBackend>(db.get());
     }
 #else
+    nhlog::db()->info(
+        "Compiled without NHEKO_POSTGRES_SUPPORT. Selected database backend: LMDB");
     storage_backend_ = std::make_unique<cache::LMDBBackend>(db.get());
 #endif
 }
@@ -2436,6 +2440,7 @@ try {
     setNextBatchToken(txn, res.next_batch);
 
     if (!res.account_data.events.empty()) {
+        nhlog::db()->debug("Saving account data events: {}", res.account_data.events.size());
         auto accountDataDb = getAccountDataDb(txn, "");
         for (const auto &ev : res.account_data.events)
             std::visit(
@@ -2461,14 +2466,9 @@ try {
     std::set<std::string> spaces_with_updates;
     std::set<std::string> rooms_with_space_updates;
 
-    std::unique_ptr<cache::StorageTransaction> sqlTxn;
-    if (UserSettings::instance()->databaseBackend() != UserSettings::DatabaseBackend::LMDB) {
-        try {
-            sqlTxn = storage_backend_->createTransaction();
-        } catch (const std::exception &e) {
-            nhlog::db()->error("Failed to begin transaction for mirroring: {}", e.what());
-        }
-    }
+    nhlog::db()->debug("Saving joined rooms: {}", res.rooms.join.size());
+
+
 
 
 
@@ -2487,12 +2487,15 @@ try {
         //   room.second.account_data.events.size(),
         //   room.second.ephemeral.events.size());
 
+        nhlog::db()->debug("Saving state events for room {}", room.first);
         saveStateEvents(
           txn, statesdb, stateskeydb, membersdb, eventsDb, room.first, room.second.state.events);
         saveStateEvents(
           txn, statesdb, stateskeydb, membersdb, eventsDb, room.first, room.second.timeline.events);
 
+        nhlog::db()->debug("Saving timeline messages for room {}", room.first);
         saveTimelineMessages(txn, eventsDb, room.first, room.second.timeline);
+        nhlog::db()->debug("Saved timeline messages for room {}", room.first);
 
         RoomInfo updatedInfo;
         std::string_view originalRoomInfoDump;
@@ -2569,9 +2572,11 @@ try {
 
         // Process the account_data associated with this room
         if (!room.second.account_data.events.empty()) {
+            nhlog::db()->debug("Saving per-room account data: {} events", room.second.account_data.events.size());
             auto accountDataDb = getAccountDataDb(txn, room.first);
 
             for (const auto &evt : room.second.account_data.events) {
+                nhlog::db()->debug("Saving account data event");
                 std::visit(
                   [&txn, &accountDataDb](const auto &event) {
                       if constexpr (std::is_same_v<
@@ -2612,10 +2617,12 @@ try {
             //   "Writing out new room info:\n{}\n{}", originalRoomInfoDump, newRoomInfoDump);
             db->rooms.put(txn, room.first, newRoomInfoDump);
 
-            // Mirror to SQL backend if enabled (batched)
-            if (sqlTxn) {
+            // Mirror to SQL backend if enabled
+            if (UserSettings::instance()->databaseBackend() != UserSettings::DatabaseBackend::LMDB) {
                  try {
+                     auto sqlTxn = storage_backend_->createTransaction();
                      storage_backend_->saveRoom(*sqlTxn, room.first, updatedInfo);
+                     sqlTxn->commit();
                  } catch (std::exception &e) {
                      nhlog::db()->error("Failed to mirror room {} to storage backend: {}", room.first, e.what());
                  }
@@ -2625,6 +2632,7 @@ try {
         for (const auto &e : room.second.ephemeral.events) {
             if (auto receiptsEv =
                   std::get_if<mtx::events::EphemeralEvent<mtx::events::ephemeral::Receipt>>(&e)) {
+                nhlog::db()->debug("Saving read receipts for room {}", room.first);
                 Receipts receipts;
 
                 for (const auto &[event_id, userReceipts] : receiptsEv->content.receipts) {
@@ -2648,14 +2656,6 @@ try {
 
         // Clean up non-valid invites.
         removeInvite(txn, room.first);
-    }
-
-    if (sqlTxn) {
-        try {
-            sqlTxn->commit();
-        } catch (const std::exception &e) {
-             nhlog::db()->error("Failed to commit batched mirroring transaction: {}", e.what());
-        }
     }
 
     saveInvites(txn, res.rooms.invite);
@@ -2699,6 +2699,7 @@ try {
     }
 
     emit roomReadStatus(readStatus);
+    nhlog::db()->debug("saveState finished successfully");
 } catch (const lmdb::error &lmdbException) {
     if (lmdbException.code() == MDB_DBS_FULL || lmdbException.code() == MDB_MAP_FULL) {
         if (lmdbException.code() == MDB_DBS_FULL) {
@@ -4199,8 +4200,7 @@ Cache::saveTimelineMessages(lmdb::txn &txn,
 
                 ++index;
 
-                if (nhlog::db()->should_log(spdlog::level::trace))
-                    nhlog::db()->trace("saving '{}'", orderEntry.dump());
+                nhlog::db()->debug("saving '{}'", orderEntry.dump());
 
                 cursor.put(lmdb::to_sv(index), orderEntry.dump(), MDB_APPEND);
                 evToOrderDb.put(txn, event_id, lmdb::to_sv(index));
