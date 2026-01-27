@@ -685,5 +685,5 @@ public:
     Q_INVOKABLE void downloadCrossSigningSecrets();
     Q_INVOKABLE void refreshDevices();
     Q_INVOKABLE void testDatabaseConnection();
+    Q_INVOKABLE void showDatabaseHelp();
 };
-

@@ -5,6 +5,7 @@
 #include "Cache.h"
 #include "Cache_p.h"
 
+#include "storage/StorageBackend.h"
 #include "storage/LMDBBackend.h"
 #ifdef NHEKO_POSTGRES_SUPPORT
 #include "storage/PostgresBackend.h"
@@ -2460,6 +2461,17 @@ try {
     std::set<std::string> spaces_with_updates;
     std::set<std::string> rooms_with_space_updates;
 
+    std::unique_ptr<cache::StorageTransaction> sqlTxn;
+    if (UserSettings::instance()->databaseBackend() != UserSettings::DatabaseBackend::LMDB) {
+        try {
+            sqlTxn = storage_backend_->createTransaction();
+        } catch (const std::exception &e) {
+            nhlog::db()->error("Failed to begin transaction for mirroring: {}", e.what());
+        }
+    }
+
+
+
     // Save joined rooms
     for (const auto &room : res.rooms.join) {
         auto statesdb    = getStatesDb(txn, room.first);
@@ -2600,22 +2612,12 @@ try {
             //   "Writing out new room info:\n{}\n{}", originalRoomInfoDump, newRoomInfoDump);
             db->rooms.put(txn, room.first, newRoomInfoDump);
 
-            // Mirror to Postgres if enabled
-            if (UserSettings::instance()->databaseBackend() == UserSettings::DatabaseBackend::PostgreSQL) {
+            // Mirror to SQL backend if enabled (batched)
+            if (sqlTxn) {
                  try {
-                     auto pgtxn = storage_backend_->createTransaction();
-                     storage_backend_->saveRoom(*pgtxn, room.first, updatedInfo);
-                     pgtxn->commit();
+                     storage_backend_->saveRoom(*sqlTxn, room.first, updatedInfo);
                  } catch (std::exception &e) {
-                     nhlog::db()->error("Failed to mirror room {} to Postgres: {}", room.first, e.what());
-                 }
-            } else if (UserSettings::instance()->databaseBackend() == UserSettings::DatabaseBackend::SQLite) {
-                 try {
-                     auto sqltxn = storage_backend_->createTransaction();
-                     storage_backend_->saveRoom(*sqltxn, room.first, updatedInfo);
-                     sqltxn->commit();
-                 } catch (std::exception &e) {
-                     nhlog::db()->error("Failed to mirror room {} to SQLite: {}", room.first, e.what());
+                     nhlog::db()->error("Failed to mirror room {} to storage backend: {}", room.first, e.what());
                  }
             }
         }
@@ -2646,6 +2648,14 @@ try {
 
         // Clean up non-valid invites.
         removeInvite(txn, room.first);
+    }
+
+    if (sqlTxn) {
+        try {
+            sqlTxn->commit();
+        } catch (const std::exception &e) {
+             nhlog::db()->error("Failed to commit batched mirroring transaction: {}", e.what());
+        }
     }
 
     saveInvites(txn, res.rooms.invite);
@@ -4189,7 +4199,8 @@ Cache::saveTimelineMessages(lmdb::txn &txn,
 
                 ++index;
 
-                nhlog::db()->debug("saving '{}'", orderEntry.dump());
+                if (nhlog::db()->should_log(spdlog::level::trace))
+                    nhlog::db()->trace("saving '{}'", orderEntry.dump());
 
                 cursor.put(lmdb::to_sv(index), orderEntry.dump(), MDB_APPEND);
                 evToOrderDb.put(txn, event_id, lmdb::to_sv(index));

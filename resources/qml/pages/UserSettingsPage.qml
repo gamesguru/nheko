@@ -134,6 +134,12 @@ Rectangle {
                                     text: qsTr("TEST CONNECTION")
                                     onClicked: UserSettingsModel.testDatabaseConnection()
                                 }
+                                Button {
+                                    text: qsTr("?")
+                                    ToolTip.visible: hovered
+                                    ToolTip.text: qsTr("Database backend info")
+                                    onClicked: UserSettingsModel.showDatabaseHelp()
+                                }
                                 Label {
                                     text: "Status: " + Settings.connectionStatus
                                     color: palette.text

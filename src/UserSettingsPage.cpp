@@ -2662,4 +2662,25 @@ UserSettingsModel::testDatabaseConnection()
     }
 }
 
+void
+UserSettingsModel::showDatabaseHelp()
+{
+    QMessageBox::information(
+      nullptr,
+      tr("Database Configuration"),
+      tr("Detailed Database Options:\n\n"
+         "1. Connection URL: You can specify a full PostgreSQL Connection URL in the input field.\n"
+         "   Example: postgresql://user:password@localhost:5432/nheko\n\n"
+         "2. Environment Variables: If you leave the input field empty or partial, Nheko will rely on standard "
+         "PostgreSQL environment variables like:\n"
+         "   - PGUSER\n"
+         "   - PGPASSWORD\n"
+         "   - PGHOST\n"
+         "   - PGPORT\n"
+         "   - PGDATABASE\n"
+         "   These must be set before launching Nheko for them to work.\n\n"
+         "3. SQLite: This backend uses a local file and does not require any configuration URL."));
+}
+
 #include "moc_UserSettingsPage.cpp"
+
