@@ -1538,26 +1538,71 @@ ChatPage::decryptDownloadedSecrets(mtx::secret_storage::AesHmacSha2KeyDescriptio
         if (!decrypted.empty()) {
             cache::storeSecret(secretName, decrypted);
 
-            if (deviceKeys && deviceKeys->device_keys.count(http::client()->device_id()) &&
+            auto myUserId   = http::client()->user_id().to_string();
+            auto myDeviceId = http::client()->device_id();
+
+            if (deviceKeys && deviceKeys->device_keys.count(myDeviceId) &&
                 secretName == mtx::secret_storage::secrets::cross_signing_self_signing) {
-                auto myKey = deviceKeys->device_keys.at(http::client()->device_id());
-                if (myKey.user_id == http::client()->user_id().to_string() &&
-                    myKey.device_id == http::client()->device_id() &&
-                    myKey.keys["ed25519:" + http::client()->device_id()] ==
+                auto myKey = deviceKeys->device_keys.at(myDeviceId);
+                if (myKey.user_id == myUserId && myKey.device_id == myDeviceId &&
+                    myKey.keys["ed25519:" + myDeviceId] ==
                       olm::client()->identity_keys().ed25519 &&
-                    myKey.keys["curve25519:" + http::client()->device_id()] ==
+                    myKey.keys["curve25519:" + myDeviceId] ==
                       olm::client()->identity_keys().curve25519) {
                     nlohmann::json j = myKey;
                     j.erase("signatures");
                     j.erase("unsigned");
 
                     auto ssk = mtx::crypto::PkSigning::from_seed(decrypted);
-                    myKey.signatures[http::client()->user_id().to_string()]
-                                    ["ed25519:" + ssk.public_key()] = ssk.sign(j.dump());
-                    req.signatures[http::client()->user_id().to_string()]
-                                  [http::client()->device_id()] = myKey;
+                    myKey.signatures[myUserId]["ed25519:" + ssk.public_key()] = ssk.sign(j.dump());
+                    req.signatures[myUserId][myDeviceId]                      = myKey;
                 }
-            } else if (deviceKeys &&
+            } else if (!deviceKeys &&
+                       secretName == mtx::secret_storage::secrets::cross_signing_self_signing) {
+                // If we don't have the device keys, query them and try again
+                mtx::requests::QueryKeys qk;
+                qk.device_keys[myUserId] = {};
+                http::client()->query_keys(
+                  qk,
+                  [secrets, keyDesc, myUserId, myDeviceId](
+                    const mtx::responses::QueryKeys &res, mtx::http::RequestErr err) {
+                      if (err) {
+                          nhlog::net()->warn("failed to query device keys for self-signing: {}",
+                                             *err);
+                          return;
+                      }
+
+                      // We need to re-run the signing logic.
+                      // Since we are inside a loop, we can't easily jump back.
+                      // Instead, we just construct the ONE signature we missed here.
+                      
+                      auto deviceKeys = res.device_keys;
+                      if (deviceKeys.count(myUserId) && deviceKeys.at(myUserId).count(myDeviceId)) {
+                          auto myKey = deviceKeys.at(myUserId).at(myDeviceId);
+                          // find the decrypted secret again - we captured 'secrets' by copy but we need the plain text.
+                          // We re-decrypt it? No, we shouldn't re-decrypt. 
+                          // Simpler: trigger a re-check or just handle it.
+
+                          // Actually, we can just grab the secret from the cache since we stored it a few lines above!
+                           auto secret = cache::secret(mtx::secret_storage::secrets::cross_signing_self_signing);
+                           if (!secret) return;
+
+                           auto ssk = mtx::crypto::PkSigning::from_seed(*secret);
+                           nlohmann::json j = myKey;
+                           j.erase("signatures");
+                           j.erase("unsigned");
+                           
+                           myKey.signatures[myUserId]["ed25519:" + ssk.public_key()] = ssk.sign(j.dump());
+                           
+                           mtx::requests::KeySignaturesUpload req;
+                           req.signatures[myUserId][myDeviceId] = myKey;
+                           
+                           http::client()->keys_signatures_upload(req, [](const mtx::responses::KeySignaturesUpload &, mtx::http::RequestErr err) {
+                               if (err) nhlog::net()->error("failed to upload delayed self-signature: {}", *err);
+                           });
+                      }
+                  });
+            } else if (deviceKeys && deviceKeys->device_keys.count(http::client()->device_id()) &&
                        secretName == mtx::secret_storage::secrets::cross_signing_master) {
                 auto mk = mtx::crypto::PkSigning::from_seed(decrypted);
 

@@ -131,14 +131,8 @@ Rectangle {
                             roleValue: UserSettingsModel.DatabaseConnectionControl
                             RowLayout {
                                 Button {
-                                    text: qsTr("TEST CONNECTION")
+                                    text: qsTr("REFRESH")
                                     onClicked: UserSettingsModel.testDatabaseConnection()
-                                }
-                                Button {
-                                    text: qsTr("?")
-                                    ToolTip.visible: hovered
-                                    ToolTip.text: qsTr("Database backend info")
-                                    onClicked: UserSettingsModel.showDatabaseHelp()
                                 }
                                 Label {
                                     text: qsTr("Status: %1").arg(Settings.connectionStatus)

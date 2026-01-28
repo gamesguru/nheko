@@ -2625,37 +2625,12 @@ UserSettingsModel::testDatabaseConnection()
     auto s = UserSettings::instance();
     auto backend = s->databaseBackend();
     
-    s->setConnectionStatus(tr("Testing..."));
-    
     if (backend == UserSettings::DatabaseBackend::LMDB) {
-         nhlog::db()->info("Testing LMDB connection...");
-         // For LMDB, if the app is running, it works.
-         s->setConnectionStatus(tr("LMDB: Connection successful!"));
+         // for now we just show that it is loaded, since we can't really "test" it without doing work
+         s->setConnectionStatus(tr("LMDB: Loaded"));
     } else if (backend == UserSettings::DatabaseBackend::SQLite) {
-         nhlog::db()->info("Testing SQLite connection...");
-         // Similar for SQLite, if initialized, it works.
-         s->setConnectionStatus(tr("SQLite: Connection successful!"));
+         s->setConnectionStatus(tr("SQLite: Loaded"));
     }
-}
-
-void
-UserSettingsModel::showDatabaseHelp()
-{
-    QMessageBox::information(
-      nullptr,
-      tr("Database Configuration"),
-      tr("Detailed Database Options:\n\n"
-         "1. Connection URL: You can specify a full PostgreSQL Connection URL in the input field.\n"
-         "   Example: postgresql://user:password@localhost:5432/nheko\n\n"
-         "2. Environment Variables: If you leave the input field empty or partial, Nheko will rely on standard "
-         "PostgreSQL environment variables like:\n"
-         "   - PGUSER\n"
-         "   - PGPASSWORD\n"
-         "   - PGHOST\n"
-         "   - PGPORT\n"
-         "   - PGDATABASE\n"
-         "   These must be set before launching Nheko for them to work.\n\n"
-         "3. SQLite: This backend uses a local file and does not require any configuration URL."));
 }
 
 #include "moc_UserSettingsPage.cpp"
