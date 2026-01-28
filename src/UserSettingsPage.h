@@ -609,6 +609,7 @@ class UserSettingsModel : public QAbstractListModel
         LogLevel,
 
         StorageSection,
+        DatabaseBackend,
         DatabaseHealth,
 
         COUNT,

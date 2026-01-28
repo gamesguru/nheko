@@ -81,7 +81,7 @@ SQLiteBackend::SQLiteBackend(const std::string& dbPath) {
         "PRAGMA synchronous=NORMAL;",
         "PRAGMA cache_size=-64000;", // 64MB cache
         "PRAGMA temp_store=MEMORY;",
-        "PRAGMA mmap_size=30000000000;", // Use mmap if possible
+        "PRAGMA mmap_size=1073741824;", // Use mmap with a conservative 1GB limit
     };
 
     for (const auto& pragma : performance_ddl) {
@@ -217,6 +217,7 @@ void SQLiteBackend::deleteRoom(StorageTransaction& txn, const std::string& roomI
         "DELETE FROM room_members WHERE room_id = ?",
         "DELETE FROM events WHERE room_id = ?",
         "DELETE FROM state_events WHERE room_id = ?",
+        "DELETE FROM media_search WHERE room_id = ?",
         "DELETE FROM media_metadata WHERE room_id = ?" 
     };
 
@@ -250,8 +251,9 @@ std::optional<RoomInfo> SQLiteBackend::getRoom(StorageTransaction& txn, const st
     
     std::optional<RoomInfo> result;
     if (sqlite3_step(stmt) == SQLITE_ROW) {
-        if (auto text = sqlite3_column_text(stmt, 0)) {
-            std::string jsonStr = reinterpret_cast<const char*>(text);
+        auto text = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+        if (text) {
+            std::string jsonStr = text;
             try {
                 result = nlohmann::json::parse(jsonStr).get<RoomInfo>();
             } catch (...) {}

@@ -927,29 +927,29 @@ ChatPage::inputSecretStoragePassphrase(QString passphrase)
     if (!pendingKeyDesc_ || !pendingSecrets_)
         return;
 
+    if (passphrase.isEmpty())
+        return;
+
     auto keyDesc = *pendingKeyDesc_;
     auto secrets = *pendingSecrets_;
     this->pendingKeyDesc_.reset();
     this->pendingSecrets_.reset();
 
-    if (passphrase.isEmpty())
-        return;
-
     using namespace mtx::secret_storage;
 
-    auto decryptionKey = mtx::crypto::to_secret(passphrase.toStdString());
+    auto decryptionKey = mtx::crypto::to_binary_buf(passphrase.toStdString());
     if (keyDesc.passphrase) {
         decryptionKey =
-          mtx::crypto::pbkdf2_hmac_sha512(passphrase.toStdString(),
-                             keyDesc.passphrase->salt,
+          mtx::crypto::PBKDF2_HMAC_SHA_512(passphrase.toStdString(),
+                             mtx::crypto::to_binary_buf(keyDesc.passphrase->salt),
                              keyDesc.passphrase->iterations,
                              keyDesc.passphrase->bits ? keyDesc.passphrase->bits : 256);
     }
 
     for (const auto &[name, secret] : secrets) {
-        auto decrypted = decrypt(secret, decryptionKey, name);
-        if (decrypted)
-            cache::storeSecret(name, *decrypted);
+        auto decrypted = mtx::crypto::decrypt(secret, decryptionKey, name);
+        if (!decrypted.empty())
+            cache::storeSecret(name, decrypted);
     }
 }
 

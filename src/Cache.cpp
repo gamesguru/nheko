@@ -2708,7 +2708,7 @@ try {
 
     // Create a single SQL transaction for all room mirroring (if using SQL backend)
     std::unique_ptr<cache::StorageTransaction> sqlTxn;
-    if (storage_backend_->isSql()) {
+    if (storage_backend_ && storage_backend_->isSql()) {
         nhlog::db()->debug("Creating batched SQL transaction for mirroring");
         try {
             sqlTxn = storage_backend_->createTransaction();

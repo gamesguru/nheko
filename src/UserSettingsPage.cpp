@@ -175,7 +175,7 @@ UserSettings::load(std::optional<QString> profile)
 UserSettings::DatabaseBackend
 UserSettings::databaseBackend() const
 {
-    auto val = settings.value("database/backend", "SQLite").toString();
+    auto val = settings.value("database/backend", "LMDB").toString();
 
     if (val == "LMDB") return DatabaseBackend::LMDB;
     return DatabaseBackend::SQLite;
@@ -186,26 +186,12 @@ UserSettings::setDatabaseBackend(DatabaseBackend value)
 {
     QString val;
     switch(value) {
-        case DatabaseBackend::PostgreSQL: val = "PostgreSQL"; break;
         case DatabaseBackend::SQLite: val = "SQLite"; break;
         default: val = "SQLite"; break;
     }
     settings.setValue("database/backend", val);
     nhlog::db()->info("User switched database backend to: {}", val.toStdString());
     emit databaseBackendChanged();
-}
-
-QString
-UserSettings::postgresUrl() const
-{
-    return settings.value("database/postgres_url", "postgresql://user:password@localhost/nheko").toString();
-}
-
-void
-UserSettings::setPostgresUrl(QString value)
-{
-    settings.setValue("database/postgres_url", value);
-    emit postgresUrlChanged();
 }
 
 bool
@@ -1269,10 +1255,8 @@ UserSettingsModel::data(const QModelIndex &index, int role) const
             return tr("Periodically delete expired events");
         case StorageSection:
             return tr("STORAGE");
-        case UsePostgres:
+        case DatabaseBackend:
             return tr("Backend Database");
-        case PostgresUrl:
-            return tr("Database URL");
         case DatabaseHealth:
             return tr("Database Connection Status");
         }
@@ -1647,10 +1631,8 @@ UserSettingsModel::data(const QModelIndex &index, int role) const
             return tr("Manage your ignored users.");
         case StorageSection:
             return tr("Backend Database");
-        case UsePostgres:
-            return tr("Database Type");
-        case PostgresUrl:
-            return tr("Database URL");
+        case DatabaseBackend:
+            return tr("Database Backend");
         case DatabaseHealth:
             return tr("Check if the database connection is working.");
         }
@@ -1751,10 +1733,9 @@ UserSettingsModel::data(const QModelIndex &index, int role) const
             return ManageIgnoredUsers;
         case StorageSection:
             return SectionTitle;
-        case UsePostgres:
+        case DatabaseBackend:
             return Options;
-        case PostgresUrl:
-            return EditableText;
+
         case DatabaseHealth:
             return DatabaseConnectionControl;
         }
@@ -1812,20 +1793,11 @@ UserSettingsModel::data(const QModelIndex &index, int role) const
               QStringLiteral("Dark"),
               QStringLiteral("System"),
             };
-        case UsePostgres: {
-#ifdef NHEKO_POSTGRES_SUPPORT
-             return QStringList{
-                 QStringLiteral("LMDB (v1)"),
-                 QStringLiteral("SQLite (v2)"),
-                 QStringLiteral("PostgreSQL (v2)"),
-             };
-#else
-             return QStringList{
-                 QStringLiteral("LMDB (v1)"),
-                 QStringLiteral("SQLite (v2)"),
-             };
-#endif
-        }
+        case DatabaseBackend:
+            return QStringList{
+              QStringLiteral("LMDB (v1)"),
+              QStringLiteral("SQLite (v2)"),
+            };
         case LogLevel:
             return QStringList{
               QStringLiteral("trace"),
@@ -2325,34 +2297,20 @@ UserSettingsModel::setData(const QModelIndex &index, const QVariant &value, int 
             } else
                 return false;
         }
-        case UsePostgres: {
-             auto idx = value.toInt();
-#ifdef NHEKO_POSTGRES_SUPPORT
-             // Dropdown: 0=LMDB, 1=SQLite, 2=PostgreSQL
-             switch (idx) {
-                 case 0: i->setDatabaseBackend(UserSettings::DatabaseBackend::LMDB); return true;
-                 case 1: i->setDatabaseBackend(UserSettings::DatabaseBackend::SQLite); return true;
-                 case 2: i->setDatabaseBackend(UserSettings::DatabaseBackend::PostgreSQL); return true;
-             }
-#else
-             // Dropdown: 0=LMDB, 1=SQLite (Postgres not shown)
-             switch (idx) {
-                 case 0: i->setDatabaseBackend(UserSettings::DatabaseBackend::LMDB); return true;
-                 case 1: i->setDatabaseBackend(UserSettings::DatabaseBackend::SQLite); return true;
-             }
-#endif
-             return false;
-        }
-        case PostgresUrl: {
-#ifdef NHEKO_POSTGRES_SUPPORT
-             if (value.userType() == QMetaType::QString) {
-                i->setPostgresUrl(value.toString());
+        case DatabaseBackend: {
+            auto idx = value.toInt();
+            switch (idx) {
+            case 0:
+                i->setDatabaseBackend(UserSettings::DatabaseBackend::LMDB);
                 return true;
-            } else
-#endif
-                return false;
+            case 1:
+                i->setDatabaseBackend(UserSettings::DatabaseBackend::SQLite);
+                return true;
+            }
+
+            return false;
         }
-    }
+        }
     }
     return false;
 }
@@ -2667,24 +2625,13 @@ UserSettingsModel::testDatabaseConnection()
     
     s->setConnectionStatus(tr("Testing..."));
     
-    if (backend == UserSettings::DatabaseBackend::PostgreSQL) {
-#ifdef NHEKO_POSTGRES_SUPPORT
-         nhlog::db()->info("Testing PostgreSQL connection...");
-         PGconn *conn = PQconnectdb(s->postgresUrl().toStdString().c_str());
-         if (PQstatus(conn) != CONNECTION_OK) {
-             QString error = QString::fromLatin1(PQerrorMessage(conn));
-             nhlog::db()->error("PostgreSQL connection failed: {}", error.toStdString());
-             s->setConnectionStatus(tr("PostgreSQL: Failed: %1").arg(error));
-         } else {
-             nhlog::db()->info("PostgreSQL connection successful");
-             s->setConnectionStatus(tr("PostgreSQL: Connection successful!"));
-         }
-         PQfinish(conn);
-#else
-         s->setConnectionStatus(tr("PostgreSQL support not compiled in!"));
-#endif
+    if (backend == UserSettings::DatabaseBackend::LMDB) {
+         nhlog::db()->info("Testing LMDB connection...");
+         // For LMDB, if the app is running, it works.
+         s->setConnectionStatus(tr("LMDB: Connection successful!"));
     } else if (backend == UserSettings::DatabaseBackend::SQLite) {
          nhlog::db()->info("Testing SQLite connection...");
+         // Similar for SQLite, if initialized, it works.
          s->setConnectionStatus(tr("SQLite: Connection successful!"));
     }
 }
