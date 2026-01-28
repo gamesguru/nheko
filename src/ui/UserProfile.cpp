@@ -225,7 +225,7 @@ UserProfile::signOutDevice(const QString &deviceID)
           nhlog::ui()->info("Device {} successfully signed out!", deviceID.toStdString());
           // This is us. Let's update the interface accordingly
           if (isSelf() && deviceID.toStdString() == ::http::client()->device_id()) {
-              http::client()->shutdown();
+              // http::client()->shutdown(); // Handled by dropToLoginPage
               ChatPage::instance()->dropToLoginPageCb(tr("You signed out this device."));
           } else {
               refreshDevices();

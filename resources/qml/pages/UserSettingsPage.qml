@@ -216,7 +216,7 @@ Rectangle {
                                 text: model.value
                                 onEditingFinished: model.value = text
                                 selectByMouse: true
-                                color: palette.text
+                                color: model.enabled ? palette.text : palette.buttonText
                                 topPadding: Nheko.paddingSmall
                                 bottomPadding: Nheko.paddingSmall
                                 background: Rectangle {

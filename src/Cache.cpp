@@ -2570,7 +2570,7 @@ Cache::saveStateEvent(lmdb::txn &txn,
 
             if (sqlTxn) {
                 try {
-                    storage_backend_->saveMember(*sqlTxn, room_id, e->state_key, memberJson, membershipToString(e->content.membership));
+                    storage_backend_->saveMember(*sqlTxn, room_id, e->state_key, memberJson, mtx::events::state::membershipToString(e->content.membership));
                 } catch (std::exception &ex) {
                     nhlog::db()->warn("Failed to save member to SQL: {}", ex.what());
                 }
@@ -2593,7 +2593,7 @@ Cache::saveStateEvent(lmdb::txn &txn,
                       e->content.is_direct,
                     };
 
-                    storage_backend_->saveMember(*sqlTxn, room_id, e->state_key, nlohmann::json(tmp).dump(), membershipToString(e->content.membership));
+                    storage_backend_->saveMember(*sqlTxn, room_id, e->state_key, nlohmann::json(tmp).dump(), mtx::events::state::membershipToString(e->content.membership));
                 } catch (std::exception &ex) {
                     nhlog::db()->warn("Failed to soft-delete member from SQL: {}", ex.what());
                 }
@@ -5841,10 +5841,7 @@ Cache::markDeviceVerified(const std::string &user_id, const std::string &key)
                 verified_state = nlohmann::json::parse(val).get<VerificationCache>();
             }
 
-            bool already_verified = false;
-            for (const auto &device : verified_state.device_verified)
-                if (device == key)
-                    already_verified = true;
+            bool already_verified = verified_state.device_verified.count(key);
 
             if (!already_verified) {
                 verified_state.device_verified.insert(key);
