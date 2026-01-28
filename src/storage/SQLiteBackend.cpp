@@ -211,13 +211,21 @@ void SQLiteBackend::saveRoom(StorageTransaction& txn, const std::string& roomId,
 void SQLiteBackend::deleteRoom(StorageTransaction& txn, const std::string& roomId) {
     auto db = static_cast<SQLiteTransaction&>(txn).get();
     
+    // Clean up FTS index first (media_search doesn't have room_id column, use rowid reference)
+    const char* fts_cleanup = "DELETE FROM media_search WHERE rowid IN (SELECT rowid FROM media_metadata WHERE room_id = ?)";
+    sqlite3_stmt* fts_stmt;
+    if (sqlite3_prepare_v2(db, fts_cleanup, -1, &fts_stmt, nullptr) == SQLITE_OK) {
+        sqlite3_bind_text(fts_stmt, 1, roomId.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_step(fts_stmt);
+        sqlite3_finalize(fts_stmt);
+    }
+    
     // List of tables to clean up linked by room_id
     const char* queries[] = {
         "DELETE FROM rooms WHERE room_id = ?",
         "DELETE FROM room_members WHERE room_id = ?",
         "DELETE FROM events WHERE room_id = ?",
         "DELETE FROM state_events WHERE room_id = ?",
-        "DELETE FROM media_search WHERE room_id = ?",
         "DELETE FROM media_metadata WHERE room_id = ?" 
     };
 

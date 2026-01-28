@@ -3128,12 +3128,19 @@ Cache::getRoomInfo(const std::vector<std::string> &rooms)
 {
     std::map<QString, RoomInfo> room_info;
 
-    auto txn = storage_backend_->createTransaction();
+    if (!storage_backend_)
+        return room_info;
 
-    for (const auto &room : rooms) {
-        if (auto info = storage_backend_->getRoom(*txn, room)) {
-            room_info.emplace(QString::fromStdString(room), std::move(*info));
+    try {
+        auto txn = storage_backend_->createTransaction();
+
+        for (const auto &room : rooms) {
+            if (auto info = storage_backend_->getRoom(*txn, room)) {
+                room_info.emplace(QString::fromStdString(room), std::move(*info));
+            }
         }
+    } catch (std::exception &e) {
+        nhlog::db()->warn("Failed to retrieve room info: {}", e.what());
     }
 
     return room_info;
