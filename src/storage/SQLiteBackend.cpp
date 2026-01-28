@@ -104,7 +104,7 @@ SQLiteBackend::~SQLiteBackend() {
 
 void SQLiteBackend::initializeSchema() {
     const char* ddl[] = {
-        "CREATE TABLE IF NOT EXISTS schema_version (version INTEGER PRIMARY KEY);",
+        "PRAGMA user_version = 1;",
         "CREATE TABLE IF NOT EXISTS rooms (room_id TEXT PRIMARY KEY, info TEXT);",
         "CREATE TABLE IF NOT EXISTS room_members (room_id TEXT, user_id TEXT, info TEXT, membership TEXT, PRIMARY KEY(room_id, user_id));",
         "CREATE TABLE IF NOT EXISTS events (event_id TEXT PRIMARY KEY, room_id TEXT, idx INTEGER, body TEXT);",

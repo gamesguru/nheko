@@ -613,12 +613,6 @@ Cache::Cache(const QString &userId, QObject *parent)
     nhlog::db()->info(
         "Selected database backend: {}", static_cast<int>(settings->databaseBackend()));
 
-#ifdef NHEKO_POSTGRES_SUPPORT
-    if (settings->databaseBackend() == UserSettings::DatabaseBackend::PostgreSQL) {
-        nhlog::db()->info("Using v2 storage with Postgres backend at: {}", settings->postgresUrl().toStdString());
-        storage_backend_ = std::make_unique<cache::PostgresBackend>(settings->postgresUrl().toStdString());
-    } else
-#endif
     if (settings->databaseBackend() == UserSettings::DatabaseBackend::SQLite) {
         auto sqlitePath = (cacheDirectory_ + "/nheko.sqlite").toStdString();
         nhlog::db()->info("Using v2 storage with SQLite backend at: {}", sqlitePath);

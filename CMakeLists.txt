@@ -11,7 +11,6 @@ else()
 endif()
 option(FLATPAK "Set this only if Nheko is built as a flatpak" OFF)
 option(JSON_ImplicitConversions "Disable implicit conversions in nlohmann/json" ON)
-option(NHEKO_POSTGRES_SUPPORT "Enable PostgreSQL storage backend" OFF)
 
 set(
     CMAKE_TOOLCHAIN_FILE "${CMAKE_CURRENT_LIST_DIR}/toolchain.cmake"
@@ -698,11 +697,6 @@ set(NHEKO_DEPS
     ${SRC_FILES}
     ${QRC}
     ${META_FILES_TO_INCLUDE})
-
-if(USE_POSTGRESQL)
-    list(APPEND NHEKO_DEPS ${PostgreSQL_LIBRARIES})
-    include_directories(${PostgreSQL_INCLUDE_DIRS})
-endif()
 
 if(ASAN)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address,undefined")

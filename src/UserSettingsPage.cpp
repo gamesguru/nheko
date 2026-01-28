@@ -177,8 +177,9 @@ UserSettings::databaseBackend() const
 {
     auto val = settings.value("database/backend", "LMDB").toString();
 
+    if (val == "SQLite") return DatabaseBackend::SQLite;
     if (val == "LMDB") return DatabaseBackend::LMDB;
-    return DatabaseBackend::SQLite;
+    return DatabaseBackend::LMDB;
 }
 
 void
@@ -187,7 +188,8 @@ UserSettings::setDatabaseBackend(DatabaseBackend value)
     QString val;
     switch(value) {
         case DatabaseBackend::SQLite: val = "SQLite"; break;
-        default: val = "SQLite"; break;
+        case DatabaseBackend::LMDB: val = "LMDB"; break;
+        default: val = "LMDB"; break;
     }
     settings.setValue("database/backend", val);
     nhlog::db()->info("User switched database backend to: {}", val.toStdString());
