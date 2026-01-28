@@ -143,6 +143,37 @@ std::vector<std::string> PostgresBackend::getRoomIds(StorageTransaction& txn) {
     return rooms;
 }
 
+    PQclear(res);
+    return rooms;
+}
+
+void PostgresBackend::deleteRoom(StorageTransaction& txn, const std::string& roomId) {
+    auto conn = static_cast<PostgresTransaction&>(txn).get();
+
+    const char* queries[] = {
+        "DELETE FROM rooms WHERE room_id = $1",
+        "DELETE FROM room_members WHERE room_id = $1",
+        "DELETE FROM events WHERE room_id = $1",
+        // "DELETE FROM state_events WHERE room_id = $1", // Not yet used/created in schema?
+        // Check schema in initializeSchema: 
+        // "CREATE TABLE IF NOT EXISTS events (event_id TEXT PRIMARY KEY, room_id TEXT, idx BIGINT, body JSONB);",
+        // "CREATE TABLE IF NOT EXISTS room_members ..."
+        // "CREATE TABLE IF NOT EXISTS rooms ..."
+        // It seems state_events table is NOT in Postgres schema yet based on lines 65-71. 
+        // So I only delete from what exists.
+    };
+
+    const char* paramValues[1] = { roomId.c_str() };
+
+    for (const auto& query : queries) {
+        auto res = PQexecParams(conn, query, 1, nullptr, paramValues, nullptr, nullptr, 0);
+        if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+             nhlog::db()->warn("Postgres: Failed to delete room data: {}", PQerrorMessage(conn));
+        }
+        PQclear(res);
+    }
+}
+
 } // namespace cache
 
 void PostgresBackend::saveEvent(StorageTransaction& txn, const std::string& eventId, const std::string& roomId, const std::string& eventJson) {

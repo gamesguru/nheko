@@ -84,6 +84,15 @@ std::vector<std::string> LMDBBackend::getRoomIds(StorageTransaction& txn) {
     return rooms;
 }
 
+    return rooms;
+}
+
+// No-op: Delete happens in Cache.cpp directly for LMDB
+void LMDBBackend::deleteRoom(StorageTransaction& txn, const std::string& roomId) {
+    (void)txn;
+    (void)roomId;
+}
+
 // No-op: LMDB storage for events is handled directly by Cache.cpp logic currently.
 // These methods exist to satisfy the interface for SQL backends.
 void LMDBBackend::saveEvent(StorageTransaction& txn, const std::string& eventId, const std::string& roomId, const std::string& eventJson) {

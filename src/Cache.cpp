@@ -5833,13 +5833,19 @@ Cache::markDeviceVerified(const std::string &user_id, const std::string &key)
                 verified_state = nlohmann::json::parse(val).get<VerificationCache>();
             }
 
+            bool already_verified = false;
             for (const auto &device : verified_state.device_verified)
                 if (device == key)
-                    return;
+                    already_verified = true;
 
-            verified_state.device_verified.insert(key);
-            db_.put(txn, user_id, nlohmann::json(verified_state).dump());
-            txn.commit();
+            if (!already_verified) {
+                verified_state.device_verified.insert(key);
+                db_.put(txn, user_id, nlohmann::json(verified_state).dump());
+                txn.commit();
+            }
+        } catch (std::exception &) {
+        }
+    }
         } catch (std::exception &) {
         }
     }
