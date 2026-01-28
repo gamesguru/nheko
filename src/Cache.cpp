@@ -1701,6 +1701,12 @@ Cache::removeRoom(const std::string &roomid)
     auto txn = lmdb::txn::begin(db->env_, nullptr, 0);
     removeRoom(txn, roomid);
     txn.commit();
+
+    if (storage_backend_) {
+        auto stxn = storage_backend_->createTransaction();
+        storage_backend_->deleteRoom(*stxn, roomid);
+        stxn->commit();
+    }
 }
 
 void

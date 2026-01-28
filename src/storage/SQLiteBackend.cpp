@@ -208,6 +208,34 @@ void SQLiteBackend::saveRoom(StorageTransaction& txn, const std::string& roomId,
     sqlite3_finalize(stmt);
 }
 
+void SQLiteBackend::deleteRoom(StorageTransaction& txn, const std::string& roomId) {
+    auto db = static_cast<SQLiteTransaction&>(txn).get();
+    
+    // List of tables to clean up linked by room_id
+    const char* queries[] = {
+        "DELETE FROM rooms WHERE room_id = ?",
+        "DELETE FROM room_members WHERE room_id = ?",
+        "DELETE FROM events WHERE room_id = ?",
+        "DELETE FROM state_events WHERE room_id = ?",
+        "DELETE FROM media_metadata WHERE room_id = ?" 
+    };
+
+    for (const auto& sql : queries) {
+        sqlite3_stmt* stmt;
+        if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+             nhlog::db()->warn("Failed to prepare delete statement for room {}: {}", roomId, sqlite3_errmsg(db));
+             continue;
+        }
+        
+        sqlite3_bind_text(stmt, 1, roomId.c_str(), -1, SQLITE_STATIC);
+        
+        if (sqlite3_step(stmt) != SQLITE_DONE) {
+             nhlog::db()->warn("Failed to execute delete statement for room {}: {}", roomId, sqlite3_errmsg(db));
+        }
+        sqlite3_finalize(stmt);
+    }
+}
+
 std::optional<RoomInfo> SQLiteBackend::getRoom(StorageTransaction& txn, const std::string& roomId) {
     auto db = static_cast<SQLiteTransaction&>(txn).get();
     
