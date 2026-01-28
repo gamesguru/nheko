@@ -101,6 +101,7 @@ void LMDBBackend::saveEvent(StorageTransaction& txn, const std::string& eventId,
     (void)eventJson;
 }
 
+// No-op: State events for LMDB are handled in Cache.cpp.
 void LMDBBackend::saveStateEvent(StorageTransaction& txn,
                                  const std::string& eventId,
                                  const std::string& roomId,
@@ -115,6 +116,7 @@ void LMDBBackend::saveStateEvent(StorageTransaction& txn,
     (void)eventJson;
 }
 
+// No-op: Member storage for LMDB is handled in Cache.cpp via legacy paths.
 void LMDBBackend::saveMember(StorageTransaction& txn,
                              const std::string& roomId,
                              const std::string& userId,
@@ -127,6 +129,7 @@ void LMDBBackend::saveMember(StorageTransaction& txn,
     (void)membership;
 }
 
+// No-op: Media metadata storage is not implemented for LMDB backend yet (or handled differently).
 void LMDBBackend::saveMediaMetadata(StorageTransaction& txn,
                                     const std::string& eventId,
                                     const std::string& roomId,

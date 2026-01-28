@@ -235,6 +235,9 @@ UserProfile::signOutDevice(const QString &deviceID)
 void
 UserProfile::refreshDevices()
 {
+    if (!cache::isInitialized())
+        return;
+
     cache::client()->markUserKeysOutOfDate({this->userid_.toStdString()});
     fetchDeviceList(this->userid_);
 }
