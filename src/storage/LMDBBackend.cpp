@@ -84,8 +84,7 @@ std::vector<std::string> LMDBBackend::getRoomIds(StorageTransaction& txn) {
     return rooms;
 }
 
-    return rooms;
-}
+
 
 // No-op: Delete happens in Cache.cpp directly for LMDB
 void LMDBBackend::deleteRoom(StorageTransaction& txn, const std::string& roomId) {

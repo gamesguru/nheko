@@ -620,7 +620,7 @@ Cache::Cache(const QString &userId, QObject *parent)
     } else
 #endif
     if (settings->databaseBackend() == UserSettings::DatabaseBackend::SQLite) {
-        auto sqlitePath = (QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/nheko.sqlite").toStdString();
+        auto sqlitePath = (cacheDirectory_ + "/nheko.sqlite").toStdString();
         nhlog::db()->info("Using v2 storage with SQLite backend at: {}", sqlitePath);
         storage_backend_ = std::make_unique<cache::SQLiteBackend>(sqlitePath);
     } else {
@@ -3251,7 +3251,11 @@ Cache::roomInfo(bool withInvites)
     auto roomsCursor = lmdb::cursor::open(txn, db->rooms);
     while (roomsCursor.get(room_id, room_data, MDB_NEXT)) {
         RoomInfo tmp     = nlohmann::json::parse(std::move(room_data)).get<RoomInfo>();
-        tmp.member_count = getMembersDb(txn, std::string(room_id)).size(txn);
+        try {
+            tmp.member_count = getMembersDb(txn, std::string(room_id)).size(txn);
+        } catch (lmdb::error &) {
+            tmp.member_count = 0;
+        }
         result.insert(QString::fromStdString(std::string(room_id)), std::move(tmp));
     }
     roomsCursor.close();
@@ -3261,7 +3265,11 @@ Cache::roomInfo(bool withInvites)
         auto invitesCursor = lmdb::cursor::open(txn, db->invites);
         while (invitesCursor.get(room_id, room_data, MDB_NEXT)) {
             RoomInfo tmp     = nlohmann::json::parse(room_data).get<RoomInfo>();
-            tmp.member_count = getInviteMembersDb(txn, std::string(room_id)).size(txn);
+            try {
+                tmp.member_count = getInviteMembersDb(txn, std::string(room_id)).size(txn);
+            } catch (lmdb::error &) {
+                tmp.member_count = 0;
+            }
             result.insert(QString::fromStdString(std::string(room_id)), std::move(tmp));
         }
         invitesCursor.close();
@@ -5846,9 +5854,7 @@ Cache::markDeviceVerified(const std::string &user_id, const std::string &key)
         } catch (std::exception &) {
         }
     }
-        } catch (std::exception &) {
-        }
-    }
+
 
     const auto local_user = utils::localUser().toStdString();
     std::map<std::string, VerificationStatus> tmp;
@@ -6255,6 +6261,12 @@ void
 init(const QString &user_id)
 {
     instance_ = std::make_unique<Cache>(user_id);
+}
+
+void
+teardown()
+{
+    instance_.reset();
 }
 
 Cache *
