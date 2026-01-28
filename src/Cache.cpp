@@ -2367,7 +2367,7 @@ Cache::updateState(const std::string &room, const mtx::responses::StateEvents &s
     }
 
     std::unique_ptr<cache::StorageTransaction> sqlTxn;
-    if (storage_backend_->isSql()) {
+    if (storage_backend_ && storage_backend_->isSql()) {
         try {
             sqlTxn = storage_backend_->createTransaction();
         } catch (std::exception &e) {
@@ -3080,10 +3080,17 @@ Cache::savePresence(
 RoomInfo
 Cache::singleRoomInfo(const std::string &room_id)
 {
-    auto txn = storage_backend_->createTransaction();
+    if (!storage_backend_)
+        return RoomInfo();
 
-    if (auto info = storage_backend_->getRoom(*txn, room_id)) {
-        return *info;
+    try {
+        auto txn = storage_backend_->createTransaction();
+
+        if (auto info = storage_backend_->getRoom(*txn, room_id)) {
+            return *info;
+        }
+    } catch (std::exception &e) {
+        nhlog::db()->warn("Failed to retrieve room info: {}", e.what());
     }
 
     return RoomInfo();
@@ -3091,12 +3098,19 @@ Cache::singleRoomInfo(const std::string &room_id)
 void
 Cache::updateLastMessageTimestamp(const std::string &room_id, uint64_t ts)
 {
-    auto txn = storage_backend_->createTransaction();
+    if (!storage_backend_)
+        return;
 
-    if (auto info = storage_backend_->getRoom(*txn, room_id)) {
-        info->approximate_last_modification_ts = ts;
-        storage_backend_->saveRoom(*txn, room_id, *info);
-        txn->commit();
+    try {
+        auto txn = storage_backend_->createTransaction();
+
+        if (auto info = storage_backend_->getRoom(*txn, room_id)) {
+            info->approximate_last_modification_ts = ts;
+            storage_backend_->saveRoom(*txn, room_id, *info);
+            txn->commit();
+        }
+    } catch (std::exception &e) {
+        nhlog::db()->warn("Failed to update last message timestamp: {}", e.what());
     }
 }
 
@@ -3119,12 +3133,20 @@ Cache::getRoomInfo(const std::vector<std::string> &rooms)
 std::vector<QString>
 Cache::roomIds()
 {
-    auto txn = storage_backend_->createTransaction();
-    std::vector<QString> rooms;
-    for (const auto &room_id : storage_backend_->getRoomIds(*txn)) {
-        rooms.push_back(QString::fromStdString(room_id));
+    if (!storage_backend_)
+        return {};
+
+    try {
+        auto txn = storage_backend_->createTransaction();
+        std::vector<QString> rooms;
+        for (const auto &room_id : storage_backend_->getRoomIds(*txn)) {
+            rooms.push_back(QString::fromStdString(room_id));
+        }
+        return rooms;
+    } catch (std::exception &e) {
+        nhlog::db()->warn("Failed to retrieve room ids: {}", e.what());
+        return {};
     }
-    return rooms;
 }
 
 std::string
@@ -4570,7 +4592,7 @@ Cache::saveOldMessages(const std::string &room_id, const mtx::responses::Message
     auto eventsDb    = getEventsDb(txn, room_id);
     // Create a single SQL transaction for backfill mirroring
     std::unique_ptr<cache::StorageTransaction> sqlTxn;
-    if (storage_backend_->isSql()) {
+    if (storage_backend_ && storage_backend_->isSql()) {
         try {
             sqlTxn = storage_backend_->createTransaction();
         } catch (std::exception &e) {
