@@ -1301,22 +1301,43 @@ calculate_trust(const std::string &user_id,
     try {
         auto session = cache::client()->getInboundMegolmSession(index);
         if (!session) {
+            nhlog::crypto()->debug("calculate_trust: session not found for room={}, session={}",
+                                  room_id, event.session_id);
             return trustlevel;
         }
 
         olm::client()->decrypt_group_message(session.get(), event.ciphertext);
     } catch (const lmdb::error &e) {
+        nhlog::crypto()->debug("calculate_trust: db error: {}", e.what());
         return trustlevel;
     } catch (const mtx::crypto::olm_exception &e) {
+        nhlog::crypto()->debug("calculate_trust: decrypt error: {}", e.what());
         return trustlevel;
     }
 
     auto status = cache::client()->verificationStatus(user_id);
 
-    if (megolmData && megolmData->trusted &&
-        status.verified_device_keys.count(megolmData->sender_key)) {
-        trustlevel = status.verified_device_keys.at(megolmData->sender_key);
+    if (!megolmData) {
+        nhlog::crypto()->debug("calculate_trust: no megolm data for room={}, session={}, user={}",
+                              room_id, event.session_id, user_id);
+        return trustlevel;
     }
+
+    if (!megolmData->trusted) {
+        nhlog::crypto()->debug("calculate_trust: session NOT trusted for room={}, session={}, user={}, sender_key={}",
+                              room_id, event.session_id, user_id, megolmData->sender_key);
+        return trustlevel;
+    }
+
+    if (!status.verified_device_keys.count(megolmData->sender_key)) {
+        nhlog::crypto()->debug("calculate_trust: sender_key {} not in verified_device_keys for user {} (verified_keys={})",
+                              megolmData->sender_key, user_id, status.verified_device_keys.size());
+        return trustlevel;
+    }
+
+    trustlevel = status.verified_device_keys.at(megolmData->sender_key);
+    nhlog::crypto()->debug("calculate_trust: VERIFIED trust={} for room={}, session={}, user={}",
+                          static_cast<int>(trustlevel), room_id, event.session_id, user_id);
 
     return trustlevel;
 }

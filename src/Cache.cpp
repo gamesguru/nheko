@@ -1269,6 +1269,9 @@ Cache::saveInboundMegolmSession(const MegolmSessionIndex &index,
     const auto key     = nlohmann::json(index).dump();
     const auto pickled = pickle<InboundSessionObject>(session.get(), pickle_secret_);
 
+    nhlog::crypto()->debug("saveInboundMegolmSession: room={}, session={}, trusted={}, msg_index={}",
+                          index.room_id, index.session_id, data.trusted, data.message_index);
+
     auto txn = lmdb::txn::begin(db->env_);
 
     std::string_view value;
@@ -1278,10 +1281,14 @@ Cache::saveInboundMegolmSession(const MegolmSessionIndex &index,
         auto newIndex = olm_inbound_group_session_first_known_index(session.get());
         auto oldIndex = olm_inbound_group_session_first_known_index(oldSession.get());
 
+        nhlog::crypto()->debug("  Existing session found: oldIndex={}, newIndex={}", oldIndex, newIndex);
+
         // merge trusted > untrusted
         // first known index minimum
         if (db->megolmSessionsData.get(txn, key, value)) {
             auto oldData = nlohmann::json::parse(value).get<GroupSessionData>();
+            nhlog::crypto()->debug("  Existing data: trusted={}, msg_index={}", oldData.trusted, oldData.message_index);
+
             if (oldData.trusted && newIndex >= oldIndex) {
                 nhlog::crypto()->warn(
                   "Not storing inbound session of lesser trust or bigger index.");
@@ -1291,16 +1298,19 @@ Cache::saveInboundMegolmSession(const MegolmSessionIndex &index,
             oldData.trusted = data.trusted || oldData.trusted;
 
             if (newIndex < oldIndex) {
+                nhlog::crypto()->debug("  Updating session: new index {} < old index {}", newIndex, oldIndex);
                 db->inboundMegolmSessions.put(txn, key, pickled);
                 oldData.message_index = newIndex;
             }
 
+            nhlog::crypto()->debug("  Merged data: trusted={}", oldData.trusted);
             db->megolmSessionsData.put(txn, key, nlohmann::json(oldData).dump());
             txn.commit();
             return;
         }
     }
 
+    nhlog::crypto()->debug("  Storing new session with trusted={}", data.trusted);
     db->inboundMegolmSessions.put(txn, key, pickled);
     db->megolmSessionsData.put(txn, key, nlohmann::json(data).dump());
     txn.commit();
@@ -1463,9 +1473,14 @@ Cache::getMegolmSessionData(const MegolmSessionIndex &index)
 
         std::string_view value;
         if (db->megolmSessionsData.get(txn, nlohmann::json(index).dump(), value)) {
-            return nlohmann::json::parse(value).get<GroupSessionData>();
+            auto data = nlohmann::json::parse(value).get<GroupSessionData>();
+            nhlog::crypto()->debug("getMegolmSessionData: room={}, session={}, trusted={}",
+                                  index.room_id, index.session_id, data.trusted);
+            return data;
         }
 
+        nhlog::crypto()->debug("getMegolmSessionData: room={}, session={} NOT FOUND",
+                              index.room_id, index.session_id);
         return std::nullopt;
     } catch (std::exception &e) {
         nhlog::db()->error("Failed to retrieve Megolm Session Data: {}", e.what());
@@ -5986,8 +6001,12 @@ VerificationStatus
 Cache::verificationStatus_(const std::string &user_id, lmdb::txn &txn)
 {
     std::unique_lock<std::mutex> lock(verification_storage.verification_storage_mtx);
-    if (verification_storage.status.count(user_id))
+    if (verification_storage.status.count(user_id)) {
+        nhlog::crypto()->debug("verificationStatus: {} (cached)", user_id);
         return verification_storage.status.at(user_id);
+    }
+
+    nhlog::crypto()->debug("verificationStatus: {} (calculating...)", user_id);
 
     VerificationStatus status;
 
@@ -5998,6 +6017,8 @@ Cache::verificationStatus_(const std::string &user_id, lmdb::txn &txn)
 
     if (auto verifCache = verificationCache(user_id, txn)) {
         status.verified_devices = verifCache->device_verified;
+        nhlog::crypto()->debug("  {} has {} manually verified devices in cache",
+                              user_id, status.verified_devices.size());
     }
 
     const auto local_user = utils::localUser().toStdString();
@@ -6006,6 +6027,7 @@ Cache::verificationStatus_(const std::string &user_id, lmdb::txn &txn)
     if (user_id == local_user) {
         status.verified_devices.insert(http::client()->device_id());
         trustlevel = crypto::Trust::Verified;
+        nhlog::crypto()->debug("  {} is local user, injecting own device_id", user_id);
     }
 
     auto verifyAtLeastOneSig = [](const auto &toVerif,
@@ -6046,10 +6068,16 @@ Cache::verificationStatus_(const std::string &user_id, lmdb::txn &txn)
         // key and their master key
         auto ourKeys   = userKeys_(local_user, txn);
         auto theirKeys = userKeys_(user_id, txn);
-        if (theirKeys)
+        if (theirKeys) {
             status.no_keys = false;
+            nhlog::crypto()->debug("  {} has {} device keys", user_id, theirKeys->device_keys.size());
+        } else {
+            nhlog::crypto()->debug("  {} has no keys in cache", user_id);
+        }
 
         if (!ourKeys || !theirKeys) {
+            nhlog::crypto()->debug("  {} result: no_keys={}, unverified_count={}",
+                                  user_id, status.no_keys, status.unverified_device_count);
             verification_storage.status[user_id] = status;
             return status;
         }
@@ -6078,11 +6106,14 @@ Cache::verificationStatus_(const std::string &user_id, lmdb::txn &txn)
               verifyAtLeastOneSig(
                 theirKeys->master_keys, ourKeys->user_signing_keys.keys, local_user);
 
-            if (theirMasterKeyVerified)
+            if (theirMasterKeyVerified) {
                 trustlevel = crypto::Trust::Verified;
-            else if (!theirKeys->master_key_changed)
+                nhlog::crypto()->debug("  {} master key is verified via cross-signing", user_id);
+            } else if (!theirKeys->master_key_changed) {
                 trustlevel = crypto::Trust::TOFU;
-            else {
+                nhlog::crypto()->debug("  {} master key is TOFU (not changed)", user_id);
+            } else {
+                nhlog::crypto()->debug("  {} master key changed and not verified", user_id);
                 verification_storage.status[user_id] = status;
                 return status;
             }
@@ -6093,8 +6124,10 @@ Cache::verificationStatus_(const std::string &user_id, lmdb::txn &txn)
         status.user_verified = trustlevel;
 
         verification_storage.status[user_id] = status;
-        if (!verifyAtLeastOneSig(theirKeys->self_signing_keys, master_keys, user_id))
+        if (!verifyAtLeastOneSig(theirKeys->self_signing_keys, master_keys, user_id)) {
+            nhlog::crypto()->debug("  {} self-signing key not verified by master key", user_id);
             return status;
+        }
 
         for (const auto &[device, device_key] : theirKeys->device_keys) {
             (void)device;
@@ -6103,12 +6136,17 @@ Cache::verificationStatus_(const std::string &user_id, lmdb::txn &txn)
                 if (verifyAtLeastOneSig(device_key, theirKeys->self_signing_keys.keys, user_id)) {
                     status.verified_devices.insert(device_key.device_id);
                     status.verified_device_keys[identkey] = trustlevel;
+                    nhlog::crypto()->debug("  {} device {} verified via self-signing key (curve25519={})",
+                                          user_id, device_key.device_id, identkey);
                 }
             } catch (...) {
             }
         }
 
         updateUnverifiedDevices(theirKeys->device_keys);
+        nhlog::crypto()->debug("  {} final: user_verified={}, verified_devices={}, unverified_count={}",
+                              user_id, static_cast<int>(status.user_verified),
+                              status.verified_devices.size(), status.unverified_device_count);
         verification_storage.status[user_id] = status;
         return status;
     } catch (std::exception &e) {
