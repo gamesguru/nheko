@@ -957,8 +957,13 @@ ChatPage::inputSecretStoragePassphrase(QString passphrase)
         }
     }
 
+    if (!decryptionKey) {
+        nhlog::crypto()->error("Failed to derive decryption key");
+        return;
+    }
+
     for (const auto &[name, secret] : secrets) {
-        auto decrypted = mtx::crypto::decrypt(secret, decryptionKey, name);
+        auto decrypted = mtx::crypto::decrypt(secret, *decryptionKey, name);
         if (!decrypted.empty())
             cache::storeSecret(name, decrypted);
     }
