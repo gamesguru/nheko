@@ -2625,11 +2625,22 @@ UserSettingsModel::testDatabaseConnection()
     auto s = UserSettings::instance();
     auto backend = s->databaseBackend();
     
-    if (backend == UserSettings::DatabaseBackend::LMDB) {
-         // for now we just show that it is loaded, since we can't really "test" it without doing work
-         s->setConnectionStatus(tr("LMDB: Loaded"));
-    } else if (backend == UserSettings::DatabaseBackend::SQLite) {
-         s->setConnectionStatus(tr("SQLite: Loaded"));
+    if (!cache::isInitialized()) {
+         s->setConnectionStatus(tr("Database not initialized"));
+         return;
+    }
+
+    try {
+         // Perform a lightweight read to verify connectivity
+         auto rooms = cache::roomInfo(false);
+         
+         if (backend == UserSettings::DatabaseBackend::LMDB) {
+              s->setConnectionStatus(tr("LMDB: Connected (Read %n room(s))", "", rooms.size()));
+         } else if (backend == UserSettings::DatabaseBackend::SQLite) {
+              s->setConnectionStatus(tr("SQLite: Connected (Read %n room(s))", "", rooms.size()));
+         }
+    } catch (std::exception &e) {
+         s->setConnectionStatus(tr("Connection Failed: %1").arg(e.what()));
     }
 }
 

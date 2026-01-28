@@ -350,15 +350,17 @@ UserProfile::updateVerificationStatus()
     deviceInfo.reserve(devices.size());
     for (const auto &d : devices) {
         auto device = d.second;
-        verification::Status verified =
-          std::find(verificationStatus.verified_devices.begin(),
-                    verificationStatus.verified_devices.end(),
-                    device.device_id) == verificationStatus.verified_devices.end()
-            ? verification::UNVERIFIED
-            : verification::VERIFIED;
-
-        if (isSelf() && device.device_id == ::http::client()->device_id())
+        verification::Status verified;
+        if (isSelf() && device.device_id == ::http::client()->device_id()) {
             verified = verification::Status::SELF;
+        } else {
+            verified =
+              std::find(verificationStatus.verified_devices.begin(),
+                        verificationStatus.verified_devices.end(),
+                        device.device_id) == verificationStatus.verified_devices.end()
+                ? verification::UNVERIFIED
+                : verification::VERIFIED;
+        }
 
         deviceInfo.emplace_back(QString::fromStdString(d.first),
                                 QString::fromStdString(device.unsigned_info.device_display_name),

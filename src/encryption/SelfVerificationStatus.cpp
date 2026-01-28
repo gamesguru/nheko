@@ -335,8 +335,10 @@ SelfVerificationStatus::invalidate()
     auto verifStatus = cache::client()->verificationStatus(http::client()->user_id().to_string());
 
     if (!verifStatus.user_verified) {
-        this->status_ = SelfVerificationStatus::UnverifiedMasterKey;
-        emit statusChanged();
+        if (this->status_ != SelfVerificationStatus::UnverifiedMasterKey) {
+            this->status_ = SelfVerificationStatus::UnverifiedMasterKey;
+            emit statusChanged();
+        }
         return;
     }
 
@@ -348,8 +350,10 @@ SelfVerificationStatus::invalidate()
     
     // Check if the current device is verified. If not, treat it as an unverified login.
     if (!verifStatus.verified_devices.count(http::client()->device_id())) {
-        this->status_ = SelfVerificationStatus::UnverifiedMasterKey;
-        emit statusChanged();
+        if (this->status_ != SelfVerificationStatus::UnverifiedMasterKey) {
+            this->status_ = SelfVerificationStatus::UnverifiedMasterKey;
+            emit statusChanged();
+        }
         return;
     }
 

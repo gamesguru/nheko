@@ -22,6 +22,7 @@ ApplicationWindow {
     }
 
     ScrollView {
+        id: scrollView
         anchors.margins: Nheko.paddingMedium
         anchors.fill: parent
         padding: Nheko.paddingMedium
@@ -33,13 +34,15 @@ ApplicationWindow {
             color: palette.text
             readOnly: true
             textFormat: Text.PlainText
+            selectByMouse: true
+
+            width: Math.max(scrollView.availableWidth, implicitWidth)
+            height: Math.max(scrollView.availableHeight, implicitHeight)
 
             background: Rectangle {
                 color: palette.base
             }
-
         }
-
     }
 
     footer: DialogButtonBox {

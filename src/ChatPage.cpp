@@ -937,13 +937,24 @@ ChatPage::inputSecretStoragePassphrase(QString passphrase)
 
     using namespace mtx::secret_storage;
 
-    auto decryptionKey = mtx::crypto::to_binary_buf(passphrase.toStdString());
-    if (keyDesc.passphrase) {
-        decryptionKey =
-          mtx::crypto::PBKDF2_HMAC_SHA_512(passphrase.toStdString(),
-                             mtx::crypto::to_binary_buf(keyDesc.passphrase->salt),
-                             keyDesc.passphrase->iterations,
-                             keyDesc.passphrase->bits ? keyDesc.passphrase->bits : 256);
+    // strip space chars from a recovery key. It can't contain those, but some clients insert them
+    // to make them easier to read.
+    QString stripped = passphrase;
+    stripped.remove(' ');
+    stripped.remove('\n');
+    stripped.remove('\t');
+
+    auto decryptionKey = mtx::crypto::key_from_recoverykey(stripped.toStdString(), keyDesc);
+    if (!decryptionKey && keyDesc.passphrase) {
+        try {
+            decryptionKey =
+              mtx::crypto::PBKDF2_HMAC_SHA_512(passphrase.toStdString(),
+                                 mtx::crypto::to_binary_buf(keyDesc.passphrase->salt),
+                                 keyDesc.passphrase->iterations,
+                                 keyDesc.passphrase->bits ? keyDesc.passphrase->bits : 256);
+        } catch (std::exception &e) {
+            nhlog::crypto()->error("Failed to derive secret key from passphrase: {}", e.what());
+        }
     }
 
     for (const auto &[name, secret] : secrets) {

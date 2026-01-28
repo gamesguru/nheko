@@ -148,14 +148,14 @@ void SQLiteBackend::saveMediaMetadata(StorageTransaction& txn,
         throw std::runtime_error("Failed to prepare saveMediaMetadata statement: " + std::string(sqlite3_errmsg(db)));
     }
     
-    sqlite3_bind_text(stmt, 1, eventId.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 2, roomId.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 3, filename.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 4, mimetype.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 1, eventId.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 2, roomId.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 3, filename.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 4, mimetype.c_str(), -1, SQLITE_TRANSIENT);
     sqlite3_bind_int64(stmt, 5, size);
     sqlite3_bind_int(stmt, 6, width);
     sqlite3_bind_int(stmt, 7, height);
-    sqlite3_bind_text(stmt, 8, blurhash.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 8, blurhash.c_str(), -1, SQLITE_TRANSIENT);
     
     if (sqlite3_step(stmt) != SQLITE_DONE) {
         std::string err = sqlite3_errmsg(db);
@@ -169,8 +169,8 @@ void SQLiteBackend::saveMediaMetadata(StorageTransaction& txn,
         throw std::runtime_error("Failed to prepare media_search statement: " + std::string(sqlite3_errmsg(db)));
     }
     
-    sqlite3_bind_text(stmt, 1, eventId.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 2, filename.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 1, eventId.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 2, filename.c_str(), -1, SQLITE_TRANSIENT);
     
     if (sqlite3_step(stmt) != SQLITE_DONE) {
         std::string err = sqlite3_errmsg(db);
@@ -196,8 +196,8 @@ void SQLiteBackend::saveRoom(StorageTransaction& txn, const std::string& roomId,
         throw std::runtime_error("Failed to prepare saveRoom statement: " + std::string(sqlite3_errmsg(db)));
     }
     
-    sqlite3_bind_text(stmt, 1, roomId.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 2, json.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 1, roomId.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 2, json.c_str(), -1, SQLITE_TRANSIENT);
     
     if (sqlite3_step(stmt) != SQLITE_DONE) {
         std::string err = sqlite3_errmsg(db);
@@ -228,7 +228,7 @@ void SQLiteBackend::deleteRoom(StorageTransaction& txn, const std::string& roomI
              continue;
         }
         
-        sqlite3_bind_text(stmt, 1, roomId.c_str(), -1, SQLITE_STATIC);
+        sqlite3_bind_text(stmt, 1, roomId.c_str(), -1, SQLITE_TRANSIENT);
         
         if (sqlite3_step(stmt) != SQLITE_DONE) {
              nhlog::db()->warn("Failed to execute delete statement for room {}: {}", roomId, sqlite3_errmsg(db));
@@ -247,7 +247,7 @@ std::optional<RoomInfo> SQLiteBackend::getRoom(StorageTransaction& txn, const st
         throw std::runtime_error("Failed to prepare getRoom statement: " + std::string(sqlite3_errmsg(db)));
     }
     
-    sqlite3_bind_text(stmt, 1, roomId.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 1, roomId.c_str(), -1, SQLITE_TRANSIENT);
     
     std::optional<RoomInfo> result;
     if (sqlite3_step(stmt) == SQLITE_ROW) {
@@ -295,9 +295,9 @@ void SQLiteBackend::saveEvent(StorageTransaction& txn, const std::string& eventI
         throw std::runtime_error("Failed to prepare saveEvent statement: " + std::string(sqlite3_errmsg(db)));
     }
     
-    sqlite3_bind_text(stmt, 1, eventId.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 2, roomId.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 3, eventJson.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 1, eventId.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 2, roomId.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 3, eventJson.c_str(), -1, SQLITE_TRANSIENT);
     
     if (sqlite3_step(stmt) != SQLITE_DONE) {
         std::string err = sqlite3_errmsg(db);
@@ -326,10 +326,10 @@ void SQLiteBackend::saveStateEvent(StorageTransaction& txn,
         throw std::runtime_error("Failed to prepare saveStateEvent statement: " + std::string(sqlite3_errmsg(db)));
     }
     
-    sqlite3_bind_text(stmt, 1, roomId.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 2, type.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 3, stateKey.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 4, eventId.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 1, roomId.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 2, type.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 3, stateKey.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 4, eventId.c_str(), -1, SQLITE_TRANSIENT);
     
     if (sqlite3_step(stmt) != SQLITE_DONE) {
         std::string err = sqlite3_errmsg(db);
@@ -354,10 +354,10 @@ void SQLiteBackend::saveMember(StorageTransaction& txn,
         throw std::runtime_error("Failed to prepare saveMember statement: " + std::string(sqlite3_errmsg(db)));
     }
     
-    sqlite3_bind_text(stmt, 1, roomId.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 2, userId.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 3, memberInfoJson.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 4, membership.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 1, roomId.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 2, userId.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 3, memberInfoJson.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 4, membership.c_str(), -1, SQLITE_TRANSIENT);
     
     if (sqlite3_step(stmt) != SQLITE_DONE) {
         std::string err = sqlite3_errmsg(db);

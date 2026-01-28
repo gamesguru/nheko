@@ -2564,7 +2564,7 @@ Cache::saveStateEvent(lmdb::txn &txn,
 
             if (sqlTxn) {
                 try {
-                    storage_backend_->saveMember(*sqlTxn, room_id, e->state_key, memberJson, mtx::events::state::membershipToString(e->content.membership));
+                    storage_backend_->saveMember(*sqlTxn, room_id, e->state_key, memberJson, mtx::events::state::to_string(e->content.membership));
                 } catch (std::exception &ex) {
                     nhlog::db()->warn("Failed to save member to SQL: {}", ex.what());
                 }
@@ -2587,7 +2587,7 @@ Cache::saveStateEvent(lmdb::txn &txn,
                       e->content.is_direct,
                     };
 
-                    storage_backend_->saveMember(*sqlTxn, room_id, e->state_key, nlohmann::json(tmp).dump(), mtx::events::state::membershipToString(e->content.membership));
+                    storage_backend_->saveMember(*sqlTxn, room_id, e->state_key, nlohmann::json(tmp).dump(), mtx::events::state::to_string(e->content.membership));
                 } catch (std::exception &ex) {
                     nhlog::db()->warn("Failed to soft-delete member from SQL: {}", ex.what());
                 }
@@ -3092,19 +3092,34 @@ Cache::singleRoomInfo(const std::string &room_id)
 void
 Cache::updateLastMessageTimestamp(const std::string &room_id, uint64_t ts)
 {
-    if (!storage_backend_)
-        return;
+    auto txn = lmdb::txn::begin(db->env_);
 
     try {
-        auto txn = storage_backend_->createTransaction();
+        if (storage_backend_) {
+            try {
+                auto sqlTxn = storage_backend_->createTransaction();
+                if (sqlTxn) {
+                    if (auto info = storage_backend_->getRoom(*sqlTxn, room_id)) {
+                        info->approximate_last_modification_ts = ts;
+                        storage_backend_->saveRoom(*sqlTxn, room_id, *info);
+                        sqlTxn->commit();
+                    }
+                }
+            } catch (std::exception &e) {
+                nhlog::db()->warn("Failed to update last message timestamp for {}: {}", room_id, e.what());
+            }
+        }
 
-        if (auto info = storage_backend_->getRoom(*txn, room_id)) {
-            info->approximate_last_modification_ts = ts;
-            storage_backend_->saveRoom(*txn, room_id, *info);
-            txn->commit();
+        auto roomsDb = getRoomsDb(txn);
+        std::string_view data;
+        if (roomsDb.get(txn, room_id, data)) {
+            RoomInfo info = nlohmann::json::parse(data);
+            info.approximate_last_modification_ts = ts;
+            roomsDb.put(txn, room_id, nlohmann::json(info).dump());
+            txn.commit();
         }
     } catch (std::exception &e) {
-        nhlog::db()->warn("Failed to update last message timestamp: {}", e.what());
+        nhlog::db()->warn("Failed to update last message timestamp in cache: {}", e.what());
     }
 }
 
@@ -6525,9 +6540,35 @@ lastVisibleEvent(const std::string &room_id, std::string_view event_id)
 }
 
 RoomInfo
-singleRoomInfo(const std::string &room_id)
+Cache::singleRoomInfo(const std::string &room_id)
 {
-    return instance_->singleRoomInfo(room_id);
+    auto txn = ro_txn(db->env_);
+
+    try {
+        if (storage_backend_) {
+            auto sqlTxn = storage_backend_->createTransaction();
+            if (sqlTxn) {
+                auto res = storage_backend_->getRoom(*sqlTxn, room_id);
+                if (res)
+                    return *res;
+            }
+        }
+    } catch (std::exception &e) {
+        nhlog::db()->error("Failed to fetch room info from SQL: {}", e.what());
+    }
+
+    // Fallback to LMDB
+    auto roomsDb = getRoomsDb(txn);
+    std::string_view data;
+    if (roomsDb.get(txn, room_id, data)) {
+        try {
+            RoomInfo info = nlohmann::json::parse(data);
+            return info;
+        } catch (std::exception &e) {
+            nhlog::db()->warn("Failed to parse room info for {}: {}", room_id, e.what());
+        }
+    }
+    return RoomInfo();
 }
 
 std::map<QString, RoomInfo>
@@ -6585,9 +6626,28 @@ deleteOldData() noexcept
 }
 //! Retrieve all saved room ids.
 std::vector<std::string>
-getRoomIds(lmdb::txn &txn)
+Cache::getRoomIds(lmdb::txn &txn)
 {
-    return instance_->getRoomIds(txn);
+    if (storage_backend_) {
+        try {
+            auto sqlTxn = storage_backend_->createTransaction();
+            if (sqlTxn) {
+                return storage_backend_->getRoomIds(*sqlTxn);
+            }
+        } catch (std::exception &e) {
+            nhlog::db()->error("Failed to retrieve room IDs from SQL: {}", e.what());
+        }
+    }
+
+    auto roomsDb = getRoomsDb(txn);
+    std::vector<std::string> rooms;
+    std::string_view room_id, _unused;
+    auto cursor = lmdb::cursor::open(txn, roomsDb);
+
+    while (cursor.get(room_id, _unused, MDB_NEXT))
+        rooms.emplace_back(room_id);
+
+    return rooms;
 }
 
 //! Mark a room that uses e2e encryption.
