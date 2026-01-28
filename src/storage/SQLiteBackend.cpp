@@ -250,10 +250,12 @@ std::optional<RoomInfo> SQLiteBackend::getRoom(StorageTransaction& txn, const st
     
     std::optional<RoomInfo> result;
     if (sqlite3_step(stmt) == SQLITE_ROW) {
-        std::string jsonStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
-        try {
-            result = nlohmann::json::parse(jsonStr).get<RoomInfo>();
-        } catch (...) {}
+        if (auto text = sqlite3_column_text(stmt, 0)) {
+            std::string jsonStr = reinterpret_cast<const char*>(text);
+            try {
+                result = nlohmann::json::parse(jsonStr).get<RoomInfo>();
+            } catch (...) {}
+        }
     }
     
     sqlite3_finalize(stmt);

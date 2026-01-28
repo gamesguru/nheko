@@ -259,6 +259,48 @@ Item {
         }
     }
     Connections {
+        target: TimelineManager
+        function onShowSecretStorageInput(keyDesc, secrets) {
+            passphraseRequestDialog.keyDesc = keyDesc;
+            passphraseRequestDialog.secrets = secrets;
+            passphraseRequestDialog.open();
+        }
+    }
+
+    P.MessageDialog {
+        id: passphraseRequestDialog
+        property var keyDesc
+        property var secrets
+
+        text: qsTr("Enter your recovery key or passphrase to decrypt your cross-signing identity:")
+        buttons: P.MessageDialog.Ok | P.MessageDialog.Cancel
+
+        onAccepted: {
+             // Logic to handle input would go here, but MessageDialog is limited.
+             // We need a proper input dialog.
+             passphraseInputDialog.open();
+        }
+    }
+
+    Dialog {
+        id: passphraseInputDialog
+        title: qsTr("Enter Passphrase")
+        standardButtons: Dialog.Ok | Dialog.Cancel
+
+        ColumnLayout {
+            Label { text: qsTr("Enter your recovery key or passphrase:") }
+            MatrixTextField {
+                id: recoveryInput
+                echoMode: TextInput.Password
+                Layout.fillWidth: true
+            }
+        }
+        onAccepted: {
+            TimelineManager.inputSecretStoragePassphrase(recoveryInput.text);
+        }
+    }
+
+    Connections {
         function onSetupCompleted() {
             successDialog.open();
         }

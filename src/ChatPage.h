@@ -160,6 +160,8 @@ signals:
                            const SecretsToDecrypt &secrets);
 
     void showRoomJoinPrompt(RoomSummary *);
+    void showSecretStorageInput(mtx::secret_storage::AesHmacSha2KeyDescription keyDesc,
+                                const SecretsToDecrypt &secrets);
     void internalKnock(const QString &room,
                        const std::vector<std::string> &via,
                        QString reason             = "",
@@ -220,4 +222,10 @@ private:
 
     // Stores when our windows lost focus. Invalid when our windows have focus.
     QDateTime lastWindowActive;
+
+    std::optional<mtx::secret_storage::AesHmacSha2KeyDescription> pendingKeyDesc_;
+    std::optional<SecretsToDecrypt> pendingSecrets_;
+
+public slots:
+    void inputSecretStoragePassphrase(QString passphrase);
 };

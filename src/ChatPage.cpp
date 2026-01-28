@@ -922,6 +922,38 @@ ChatPage::trySync()
 }
 
 void
+ChatPage::inputSecretStoragePassphrase(QString passphrase)
+{
+    if (!pendingKeyDesc_ || !pendingSecrets_)
+        return;
+
+    auto keyDesc = *pendingKeyDesc_;
+    auto secrets = *pendingSecrets_;
+    this->pendingKeyDesc_.reset();
+    this->pendingSecrets_.reset();
+
+    if (passphrase.isEmpty())
+        return;
+
+    using namespace mtx::secret_storage;
+
+    auto decryptionKey = mtx::crypto::to_secret(passphrase.toStdString());
+    if (keyDesc.passphrase) {
+        decryptionKey =
+          mtx::crypto::pbkdf2_hmac_sha512(passphrase.toStdString(),
+                             keyDesc.passphrase->salt,
+                             keyDesc.passphrase->iterations,
+                             keyDesc.passphrase->bits ? keyDesc.passphrase->bits : 256);
+    }
+
+    for (const auto &[name, secret] : secrets) {
+        auto decrypted = decrypt(secret, decryptionKey, name);
+        if (decrypted)
+            cache::storeSecret(name, *decrypted);
+    }
+}
+
+void
 ChatPage::knockRoom(const QString &room,
                     const std::vector<std::string> &via,
                     QString reason,

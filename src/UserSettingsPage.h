@@ -102,7 +102,6 @@ class UserSettings final : public QObject
                  useOnlineKeyBackupChanged)
     Q_PROPERTY(QString profile READ profile WRITE setProfile NOTIFY profileChanged)
     Q_PROPERTY(DatabaseBackend databaseBackend READ databaseBackend WRITE setDatabaseBackend NOTIFY databaseBackendChanged)
-    Q_PROPERTY(QString postgresUrl READ postgresUrl WRITE setPostgresUrl NOTIFY postgresUrlChanged)
     Q_PROPERTY(QString userId READ userId WRITE setUserId NOTIFY userIdChanged)
     Q_PROPERTY(QString accessToken READ accessToken WRITE setAccessToken NOTIFY accessTokenChanged)
     Q_PROPERTY(QString deviceId READ deviceId WRITE setDeviceId NOTIFY deviceIdChanged)
@@ -178,7 +177,6 @@ public:
     {
         LMDB = 0,
         SQLite = 10,
-        PostgreSQL = 11,
     };
     Q_ENUM(DatabaseBackend)
 
@@ -260,10 +258,6 @@ public:
 
     DatabaseBackend databaseBackend() const;
     void setDatabaseBackend(DatabaseBackend value);
-
-    QString postgresUrl() const;
-    void setPostgresUrl(QString value);
-
 
     QString connectionStatus() const { return connectionStatus_; }
     void setConnectionStatus(QString status)
@@ -425,7 +419,6 @@ signals:
     void mildKeyWarningChanged(bool state);
     void logLevelChanged(QString level);
     void databaseBackendChanged();
-    void postgresUrlChanged();
     void connectionStatusChanged();
 
 private:
@@ -616,10 +609,7 @@ class UserSettingsModel : public QAbstractListModel
         LogLevel,
 
         StorageSection,
-        UsePostgres,
-        PostgresUrl,
         DatabaseHealth,
-
 
         COUNT,
         // hidden for now

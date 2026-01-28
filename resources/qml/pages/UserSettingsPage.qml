@@ -141,7 +141,7 @@ Rectangle {
                                     onClicked: UserSettingsModel.showDatabaseHelp()
                                 }
                                 Label {
-                                    text: "Status: " + Settings.connectionStatus
+                                    text: qsTr("Status: %1").arg(Settings.connectionStatus)
                                     color: palette.text
                                 }
 
@@ -212,6 +212,7 @@ Rectangle {
                         DelegateChoice {
                             roleValue: UserSettingsModel.EditableText
                             TextField {
+                                enabled: model.enabled
                                 text: model.value
                                 onEditingFinished: model.value = text
                                 selectByMouse: true

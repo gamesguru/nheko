@@ -41,8 +41,6 @@ QSharedPointer<UserSettings> UserSettings::instance_;
 
 UserSettings::UserSettings()
 {
-    connect(
-      QCoreApplication::instance(), &QCoreApplication::aboutToQuit, []() { instance_.clear(); });
 }
 
 QSharedPointer<UserSettings>
@@ -179,8 +177,7 @@ UserSettings::databaseBackend() const
 {
     auto val = settings.value("database/backend", "SQLite").toString();
 
-    if (val == "PostgreSQL") return DatabaseBackend::PostgreSQL;
-    if (val == "SQLite") return DatabaseBackend::SQLite;
+    if (val == "LMDB") return DatabaseBackend::LMDB;
     return DatabaseBackend::SQLite;
 }
 

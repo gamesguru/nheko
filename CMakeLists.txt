@@ -911,15 +911,7 @@ else()
     pkg_check_modules(blurhash REQUIRED IMPORTED_TARGET blurhash)
     target_link_libraries(nheko PRIVATE PkgConfig::blurhash)
 
-if(NHEKO_POSTGRES_SUPPORT)
-    find_package(PostgreSQL REQUIRED)
-    target_sources(nheko PRIVATE
-        src/storage/PostgresBackend.h
-        src/storage/PostgresBackend.cpp
-    )
-    target_link_libraries(nheko PRIVATE PostgreSQL::PostgreSQL)
-    target_compile_definitions(nheko PRIVATE NHEKO_POSTGRES_SUPPORT)
-endif()
+
 endif()
 
 # Fixup bundled keychain include dirs
