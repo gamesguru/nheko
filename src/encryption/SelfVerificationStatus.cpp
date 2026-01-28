@@ -319,10 +319,8 @@ SelfVerificationStatus::invalidate()
     }
 
     if (keys->master_keys.keys.empty()) {
-        if (status_ != SelfVerificationStatus::NoMasterKey) {
-            this->status_ = SelfVerificationStatus::NoMasterKey;
-            emit statusChanged();
-        }
+        this->status_ = SelfVerificationStatus::NoMasterKey;
+        emit statusChanged();
         return;
     }
 
@@ -337,10 +335,8 @@ SelfVerificationStatus::invalidate()
     auto verifStatus = cache::client()->verificationStatus(http::client()->user_id().to_string());
 
     if (!verifStatus.user_verified) {
-        if (status_ != SelfVerificationStatus::UnverifiedMasterKey) {
-            this->status_ = SelfVerificationStatus::UnverifiedMasterKey;
-            emit statusChanged();
-        }
+        this->status_ = SelfVerificationStatus::UnverifiedMasterKey;
+        emit statusChanged();
         return;
     }
 
@@ -352,10 +348,8 @@ SelfVerificationStatus::invalidate()
     
     // Check if the current device is verified. If not, treat it as an unverified login.
     if (!verifStatus.verified_devices.count(http::client()->device_id())) {
-        if (status_ != SelfVerificationStatus::UnverifiedMasterKey) {
-            this->status_ = SelfVerificationStatus::UnverifiedMasterKey;
-            emit statusChanged();
-        }
+        this->status_ = SelfVerificationStatus::UnverifiedMasterKey;
+        emit statusChanged();
         return;
     }
 
