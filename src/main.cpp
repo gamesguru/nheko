@@ -427,9 +427,6 @@ main(int argc, char *argv[])
             nhlog::net()->debug("shutting down all I/O threads & open connections");
             http::client()->close(true);
             nhlog::net()->debug("bye");
-            nhlog::net()->debug("shutting down all I/O threads & open connections");
-            http::client()->close(true);
-            nhlog::net()->debug("bye");
         }
         nhlog::db()->info("shutting down cache");
         cache::teardown();

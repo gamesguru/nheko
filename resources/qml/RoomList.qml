@@ -393,6 +393,8 @@ Page {
                 onSingleTapped: {
                     if (SelfVerificationStatus.status == SelfVerificationStatus.UnverifiedDevices)
                         SelfVerificationStatus.verifyUnverifiedDevices();
+                    else if (SelfVerificationStatus.status == SelfVerificationStatus.UnverifiedMasterKey)
+                        SelfVerificationStatus.verifyMasterKey();
                     else
                         SelfVerificationStatus.statusChanged();
                 }
