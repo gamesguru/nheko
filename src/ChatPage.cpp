@@ -442,6 +442,12 @@ ChatPage::logout()
 }
 
 void
+ChatPage::initiateLogout()
+{
+    logout();
+}
+
+void
 ChatPage::dropToLoginPage(const QString &msg)
 {
     nhlog::ui()->info("dropping to the login page: {}", msg.toStdString());
