@@ -629,10 +629,7 @@ DeviceVerificationFlow::handleStartMessage(const mtx::events::msg::KeyVerificati
             this->cancelVerification(DeviceVerificationFlow::Error::UnknownMethod);
             return;
         }
-    } else {
-            this->cancelVerification(DeviceVerificationFlow::Error::UnknownMethod);
-            return;
-        }
+
 
         if (!sender)
             this->canonical_json = nlohmann::json(msg).dump();
@@ -656,9 +653,6 @@ DeviceVerificationFlow::handleStartMessage(const mtx::events::msg::KeyVerificati
         // accept
         if (state_ != PromptStartVerification && !sender)
             this->acceptVerificationRequest();
-    } else {
-        // maybe this behavior is undesired
-        // this->cancelVerification(DeviceVerificationFlow::Error::UnknownMethod);
     }
 }
 
