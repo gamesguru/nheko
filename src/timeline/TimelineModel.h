@@ -261,6 +261,7 @@ public:
         IsEncrypted,
         IsStateEvent,
         Trustlevel,
+        EncryptionInfo,
         Notificationlevel,
         EncryptionError,
         ReplyTo,

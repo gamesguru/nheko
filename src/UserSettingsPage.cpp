@@ -330,6 +330,17 @@ UserSettings::setExpireEvents(bool state)
 }
 
 void
+UserSettings::setMildKeyWarning(bool state)
+{
+    if (mildKeyWarning_ == state)
+        return;
+
+    mildKeyWarning_ = state;
+    emit mildKeyWarningChanged(state);
+    save();
+}
+
+void
 UserSettings::setMarkdown(bool state)
 {
     if (state == markdown_)

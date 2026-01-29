@@ -385,6 +385,7 @@ signals:
     void exposeDBusApiChanged(bool state);
     void updateSpaceViasChanged(bool state);
     void expireEventsChanged(bool state);
+    void mildKeyWarningChanged(bool state);
 
 private:
     // Default to system theme if QT_QPA_PLATFORMTHEME var is set.

@@ -22,9 +22,7 @@ RowLayout {
     required property string threadId
     required property date timestamp
     required property Room room
-    required property string sessionId
-    required property string deviceId
-    required property string senderKey
+    required property var encryptionInfo
 
     spacing: 2
 

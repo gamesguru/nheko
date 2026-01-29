@@ -560,6 +560,7 @@ TimelineModel::roleNames() const
       {IsEncrypted, "isEncrypted"},
       {IsStateEvent, "isStateEvent"},
       {Trustlevel, "trustlevel"},
+      {EncryptionInfo, "encryptionInfo"},
       {Notificationlevel, "notificationlevel"},
       {EncryptionError, "encryptionError"},
       {ReplyTo, "replyTo"},
@@ -880,6 +881,21 @@ TimelineModel::data(const mtx::events::collections::TimelineEvents &event, int r
             }
         }
         return crypto::Trust::Unverified;
+    }
+
+    case EncryptionInfo: {
+        QVariantMap info;
+        auto encrypted_event = events.get(event_id(event), "", false);
+        if (encrypted_event) {
+            if (auto encrypted =
+                  std::get_if<mtx::events::EncryptedEvent<mtx::events::msg::Encrypted>>(
+                    &*encrypted_event)) {
+                info["sessionId"] = QString::fromStdString(encrypted->content.session_id);
+                info["deviceId"] = QString::fromStdString(encrypted->content.device_id);
+                info["senderKey"] = QString::fromStdString(encrypted->content.sender_key);
+            }
+        }
+        return info;
     }
 
     case Notificationlevel: {
