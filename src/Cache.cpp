@@ -6026,6 +6026,7 @@ Cache::verificationStatus_(const std::string &user_id, lmdb::txn &txn)
     crypto::Trust trustlevel = crypto::Trust::Unverified;
     if (user_id == local_user) {
         status.verified_devices.insert(http::client()->device_id());
+        // Handle empty self-queries sent by Conduit/Continuwuity
         status.verified_device_keys[olm::client()->identity_keys().curve25519] = crypto::Trust::Verified;
         trustlevel = crypto::Trust::Verified;
         nhlog::crypto()->debug("  {} is local user, injecting own device_id and key", user_id);
@@ -6191,6 +6192,11 @@ Cache::verificationStatus_(const std::string &user_id, lmdb::txn &txn)
                               user_id, static_cast<int>(status.user_verified),
                               status.verified_devices.size(), status.unverified_device_count);
         
+        if (status.verified_devices.size() != status.verified_device_keys.size()) {
+            nhlog::crypto()->warn("  {} consistency check failed: {} verified devices but only {} verified keys!", 
+                user_id, status.verified_devices.size(), status.verified_device_keys.size());
+        }
+
         // Debugging full objects for final return
         nlohmann::json statusKeyMap;
         for (const auto &[k, v] : status.verified_device_keys) statusKeyMap[k] = static_cast<int>(v);
