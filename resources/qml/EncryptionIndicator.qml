@@ -36,7 +36,7 @@ Image {
 
     ToolTip.text: {
         var deviceId = encryptionInfo && encryptionInfo.deviceId ? encryptionInfo.deviceId : "";
-        console.log("EncryptionIndicator: trust=" + trust + ", deviceId=" + deviceId + ", encrypted=" + encrypted);
+        console.log("EncryptionIndicator: trust=" + trust + ", Crypto.Verified=" + Crypto.Verified + ", Crypto.MessageUnverified=" + Crypto.MessageUnverified + ", deviceId=" + deviceId + ", encrypted=" + encrypted);
         if (!encrypted)
             return qsTr("This message is not encrypted!");
         switch (trust) {
