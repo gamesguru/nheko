@@ -25,6 +25,7 @@ class CallManager;
 
 namespace mtx::requests {
 struct CreateRoom;
+struct UploadKeys;
 }
 namespace mtx::responses {
 struct Notifications;
