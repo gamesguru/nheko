@@ -189,6 +189,7 @@ private:
     void removeOldFallbackKey();
     void getProfileInfo();
     void getBackupVersion();
+    void restoreSelfSignature(mtx::requests::UploadKeys &req);
 
     void loadStateFromCache();
     void resetUI();

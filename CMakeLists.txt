@@ -298,7 +298,8 @@ if(NOT MSVC)
         -fsized-deallocation \
         -fdiagnostics-color=always \
         -Wunreachable-code \
-        -Wno-attributes"
+        -Wno-attributes \
+        -Wno-error=unused-parameter"
     )
     if(NOT CMAKE_COMPILER_IS_GNUCXX)
         # -Wshadow is buggy and broken in GCC, so do not enable it.
