@@ -11,6 +11,7 @@ Image {
     id: stateImg
 
     property bool encrypted: false
+    property var encryptionInfo: ({})
     property bool hovered: ma.hovered
     property string sourceUrl: {
         if (!encrypted)
@@ -34,17 +35,18 @@ Image {
     property string unencryptedIcon: ":/icons/icons/ui/shield-filled-cross.svg"
 
     ToolTip.text: {
+        var deviceId = encryptionInfo && encryptionInfo.deviceId ? encryptionInfo.deviceId : "";
         if (!encrypted)
             return qsTr("This message is not encrypted!");
         switch (trust) {
         case Crypto.Verified:
-            return qsTr("Encrypted by a verified device");
+            return deviceId ? qsTr("Encrypted by verified device: %1").arg(deviceId) : qsTr("Encrypted by a verified device");
         case Crypto.TOFU:
-            return qsTr("Encrypted by an unverified device, but you have trusted that user so far.");
+            return deviceId ? qsTr("Encrypted by unverified device %1, but you have trusted that user so far.").arg(deviceId) : qsTr("Encrypted by an unverified device, but you have trusted that user so far.");
         case Crypto.MessageUnverified:
             return qsTr("Key is from an untrusted source, possibly forwarded from another user or the online key backup. For this reason we can't verify who sent the message.");
         default:
-            return qsTr("Encrypted by an unverified device.");
+            return deviceId ? qsTr("Encrypted by unverified device: %1").arg(deviceId) : qsTr("Encrypted by an unverified device.");
         }
     }
     ToolTip.visible: stateImg.hovered

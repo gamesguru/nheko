@@ -17,6 +17,7 @@ RowLayout {
     required property string eventId
     required property int status
     required property int trustlevel
+    required property var encryptionInfo
     required property bool isEdited
     required property bool isEncrypted
     required property string threadId
@@ -66,6 +67,7 @@ RowLayout {
         Layout.preferredHeight: parent.iconSize
         Layout.preferredWidth: parent.iconSize
         encrypted: metadata.room && metadata.room.isEncrypted
+        encryptionInfo: metadata.encryptionInfo
         sourceSize.height: parent.iconSize
         sourceSize.width: parent.iconSize
         trust: metadata.trustlevel

@@ -35,6 +35,7 @@ TimelineEvent {
     required property var reactions
     required property int status
     required property int trustlevel
+    required property var encryptionInfo
     required property int notificationlevel
     required property int type
     required property bool isEditable
@@ -312,6 +313,7 @@ TimelineEvent {
                 eventId: wrapper.eventId
                 status: wrapper.status
                 trustlevel: wrapper.trustlevel
+                encryptionInfo: wrapper.encryptionInfo
                 isEdited: wrapper.isEdited
                 isEncrypted: wrapper.isEncrypted
                 threadId: wrapper.threadId
