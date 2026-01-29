@@ -467,7 +467,9 @@ Cache::setup()
 
     cacheDirectory_ = cacheDirectoryName(localUserId_, settings->profile());
 
-    nhlog::db()->debug("Database at: {}", cacheDirectory_.toStdString());
+    nhlog::db()->info("Profile '{}' using database at: {}",
+                      settings->profile().toStdString(),
+                      cacheDirectory_.toStdString());
 
     bool isInitial = !QFile::exists(cacheDirectory_);
 

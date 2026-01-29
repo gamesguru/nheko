@@ -1435,11 +1435,13 @@ ChatPage::getBackupVersion()
                   using namespace mtx::crypto;
                   auto pubkey = CURVE25519_public_key_from_private(to_binary_buf(base642bin(*key)));
 
-                  if (auth_data["public_key"].get<std::string>() != pubkey) {
+                  auto serverKey = auth_data["public_key"].get<std::string>();
+                  if (serverKey != pubkey &&
+                      mtx::crypto::base642bin(serverKey) != pubkey) {
                       nhlog::crypto()->info("Our backup key {} does not match the one "
                                             "used in the online backup {}",
                                             pubkey,
-                                            auth_data["public_key"].get<std::string>());
+                                            serverKey);
                       cache::client()->deleteBackupVersion();
                       return;
                   }
