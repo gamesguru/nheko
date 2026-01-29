@@ -669,8 +669,28 @@ ChatPage::tryInitialSync()
     nhlog::crypto()->info("generating one time keys");
     olm::client()->generate_one_time_keys(MAX_ONETIME_KEYS, true);
 
+    auto req = olm::client()->create_upload_keys_request();
+
+    // Preserve self-signatures if available in cache.
+    // This prevents overwriting signed keys on the server with unsigned ones on startup.
+    auto myUser   = http::client()->user_id().to_string();
+    auto myDevice = http::client()->device_id();
+    if (req.device_keys.device_id == myDevice) {
+        if (auto keys = cache::client()->userKeys(myUser)) {
+            if (keys->device_keys.count(myDevice)) {
+                const auto &cachedKey = keys->device_keys.at(myDevice);
+                if (cachedKey.signatures.count(myUser)) {
+                    for (const auto &[key_id, signature] : cachedKey.signatures.at(myUser)) {
+                        req.device_keys.signatures[myUser][key_id] = signature;
+                        nhlog::crypto()->debug("Restored self-signature for {} from cache", key_id);
+                    }
+                }
+            }
+        }
+    }
+
     http::client()->upload_keys(
-      olm::client()->create_upload_keys_request(),
+      req,
       [this](const mtx::responses::UploadKeys &res, mtx::http::RequestErr err) {
           if (err) {
               const int status_code = static_cast<int>(err->status_code);
@@ -1300,8 +1320,25 @@ ChatPage::currentPresence() const
 void
 ChatPage::verifyOneTimeKeyCountAfterStartup()
 {
+    auto req = olm::client()->create_upload_keys_request();
+    if (req.device_keys.device_id == http::client()->device_id()) {
+        auto myUser   = http::client()->user_id().to_string();
+        auto myDevice = http::client()->device_id();
+        if (auto keys = cache::client()->userKeys(myUser)) {
+            if (keys->device_keys.count(myDevice)) {
+                const auto &cachedKey = keys->device_keys.at(myDevice);
+                if (cachedKey.signatures.count(myUser)) {
+                    for (const auto &[key_id, signature] : cachedKey.signatures.at(myUser)) {
+                        req.device_keys.signatures[myUser][key_id] = signature;
+                        nhlog::crypto()->debug("Restored self-signature for {} from cache (startup check)", key_id);
+                    }
+                }
+            }
+        }
+    }
+
     http::client()->upload_keys(
-      olm::client()->create_upload_keys_request(),
+      req,
       [this](const mtx::responses::UploadKeys &res, mtx::http::RequestErr err) {
           if (err) {
               nhlog::crypto()->warn("failed to update one-time keys: {}", err);
@@ -1355,8 +1392,25 @@ ChatPage::ensureOneTimeKeyCount(const std::map<std::string_view, uint16_t> &coun
             nhlog::crypto()->info("uploading {} {} keys", nkeys, mtx::crypto::SIGNED_CURVE25519);
             olm::client()->generate_one_time_keys(nkeys, replace_fallback_key);
 
+            auto req = olm::client()->create_upload_keys_request();
+            if (req.device_keys.device_id == http::client()->device_id()) {
+                auto myUser   = http::client()->user_id().to_string();
+                auto myDevice = http::client()->device_id();
+                if (auto keys = cache::client()->userKeys(myUser)) {
+                    if (keys->device_keys.count(myDevice)) {
+                        const auto &cachedKey = keys->device_keys.at(myDevice);
+                        if (cachedKey.signatures.count(myUser)) {
+                            for (const auto &[key_id, signature] : cachedKey.signatures.at(myUser)) {
+                                req.device_keys.signatures[myUser][key_id] = signature;
+                                nhlog::crypto()->debug("Restored self-signature for {} from cache (OTK upload)", key_id);
+                            }
+                        }
+                    }
+                }
+            }
+
             http::client()->upload_keys(
-              olm::client()->create_upload_keys_request(),
+              req,
               [replace_fallback_key, this](const mtx::responses::UploadKeys &,
                                            mtx::http::RequestErr err) {
                   if (err) {

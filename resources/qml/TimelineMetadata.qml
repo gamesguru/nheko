@@ -66,7 +66,7 @@ RowLayout {
         Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
         Layout.preferredHeight: parent.iconSize
         Layout.preferredWidth: parent.iconSize
-        encrypted: metadata.room && metadata.room.isEncrypted
+        encrypted: metadata.isEncrypted
         encryptionInfo: metadata.encryptionInfo
         sourceSize.height: parent.iconSize
         sourceSize.width: parent.iconSize
