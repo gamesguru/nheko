@@ -572,6 +572,9 @@ TimelineModel::roleNames() const
       {CallType, "callType"},
       {Dump, "dump"},
       {RelatedEventCacheBuster, "relatedEventCacheBuster"},
+      {SessionId, "sessionId"},
+      {SenderKey, "senderKey"},
+      {DeviceId, "deviceId"},
     };
 
     return roles;
@@ -598,6 +601,18 @@ TimelineModel::data(const mtx::events::collections::TimelineEvents &event, int r
     namespace acc = mtx::accessors;
 
     switch (role) {
+    case SessionId:
+        if (auto e = std::get_if<mtx::events::EncryptedEvent<mtx::events::msg::Encrypted>>(&event))
+            return QVariant::fromValue(QString::fromStdString(e->content.session_id));
+        return {};
+    case SenderKey:
+        if (auto e = std::get_if<mtx::events::EncryptedEvent<mtx::events::msg::Encrypted>>(&event))
+            return QVariant::fromValue(QString::fromStdString(e->content.sender_key));
+        return {};
+    case DeviceId:
+        if (auto e = std::get_if<mtx::events::EncryptedEvent<mtx::events::msg::Encrypted>>(&event))
+            return QVariant::fromValue(QString::fromStdString(e->content.device_id));
+        return {};
     case IsSender:
         return {acc::sender(event) == http::client()->user_id().to_string()};
     case UserId:
@@ -964,6 +979,9 @@ TimelineModel::data(const mtx::events::collections::TimelineEvents &event, int r
         m.insert(names[RoomTopic], data(event, static_cast<int>(RoomTopic)));
         m.insert(names[CallType], data(event, static_cast<int>(CallType)));
         m.insert(names[EncryptionError], data(event, static_cast<int>(EncryptionError)));
+        m.insert(names[SessionId], data(event, static_cast<int>(SessionId)));
+        m.insert(names[SenderKey], data(event, static_cast<int>(SenderKey)));
+        m.insert(names[DeviceId], data(event, static_cast<int>(DeviceId)));
 
         return QVariant(m);
     }

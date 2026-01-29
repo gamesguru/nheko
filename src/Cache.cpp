@@ -1095,8 +1095,15 @@ Cache::saveInboundMegolmSession(const MegolmSessionIndex &index,
         if (db->megolmSessionsData.get(txn, key, value)) {
             auto oldData = nlohmann::json::parse(value).get<GroupSessionData>();
             if (oldData.trusted && newIndex >= oldIndex) {
+                nhlog::crypto()->debug("Existing session found: oldIndex={}, newIndex={}",
+                                       oldIndex,
+                                       newIndex);
+                nhlog::crypto()->debug("Existing data: trusted={}, msg_index={}",
+                                       oldData.trusted,
+                                       oldData.message_index);
                 nhlog::crypto()->warn(
                   "Not storing inbound session of lesser trust or bigger index.");
+                nhlog::crypto()->debug("Returning from saveInboundMegolmSession (txn abort incoming)");
                 return;
             }
 

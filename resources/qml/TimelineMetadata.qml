@@ -22,6 +22,9 @@ RowLayout {
     required property string threadId
     required property date timestamp
     required property Room room
+    required property string sessionId
+    required property string deviceId
+    required property string senderKey
 
     spacing: 2
 
@@ -70,6 +73,9 @@ RowLayout {
         sourceSize.width: parent.iconSize
         trust: metadata.trustlevel
         visible: metadata.room.isEncrypted
+        sessionId: metadata.sessionId
+        deviceId: metadata.deviceId
+        senderKey: metadata.senderKey
     }
     Label {
         id: ts
