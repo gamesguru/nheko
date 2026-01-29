@@ -6026,8 +6026,9 @@ Cache::verificationStatus_(const std::string &user_id, lmdb::txn &txn)
     crypto::Trust trustlevel = crypto::Trust::Unverified;
     if (user_id == local_user) {
         status.verified_devices.insert(http::client()->device_id());
+        status.verified_device_keys[olm::client()->identity_keys().curve25519] = crypto::Trust::Verified;
         trustlevel = crypto::Trust::Verified;
-        nhlog::crypto()->debug("  {} is local user, injecting own device_id", user_id);
+        nhlog::crypto()->debug("  {} is local user, injecting own device_id and key", user_id);
     }
 
     auto verifyAtLeastOneSig = [](const auto &toVerif,
@@ -6092,7 +6093,28 @@ Cache::verificationStatus_(const std::string &user_id, lmdb::txn &txn)
                 !mtx::crypto::ed25519_verify_signature(olm::client()->identity_keys().ed25519,
                                                        nlohmann::json(mk),
                                                        mk.signatures.at(local_user).at(dev_id))) {
-                nhlog::crypto()->debug("We have not verified our own master key");
+                nhlog::crypto()->warn("We have not verified our own master key");
+                nhlog::crypto()->warn("  - has signature from local_user? {}", mk.signatures.count(local_user));
+                if (mk.signatures.count(local_user))
+                    nhlog::crypto()->warn("  - has signature for device {}? {}", dev_id, mk.signatures.at(local_user).count(dev_id));
+                nhlog::crypto()->warn("  - ed25519 identity key: {}", olm::client()->identity_keys().ed25519);
+                
+                // Debugging full objects as requested
+                nlohmann::json statusKeyMap;
+                for (const auto &[k, v] : status.verified_device_keys) statusKeyMap[k] = static_cast<int>(v);
+                
+                nlohmann::json statusJson;
+                statusJson["user_verified"] = static_cast<int>(status.user_verified);
+                statusJson["verified_devices"] = status.verified_devices;
+                statusJson["verified_device_keys"] = statusKeyMap;
+                statusJson["unverified_device_count"] = status.unverified_device_count;
+                statusJson["no_keys"] = status.no_keys;
+
+                nhlog::crypto()->warn("  Returning with status: {}", statusJson.dump(2));
+                if (theirKeys) {
+                     nhlog::crypto()->warn("  theirKeys: {}", nlohmann::json(*theirKeys).dump(2));
+                }
+
                 verification_storage.status[user_id] = status;
                 return status;
             }
@@ -6125,7 +6147,24 @@ Cache::verificationStatus_(const std::string &user_id, lmdb::txn &txn)
 
         verification_storage.status[user_id] = status;
         if (!verifyAtLeastOneSig(theirKeys->self_signing_keys, master_keys, user_id)) {
-            nhlog::crypto()->debug("  {} self-signing key not verified by master key", user_id);
+            nhlog::crypto()->warn("  {} self-signing key not verified by master key", user_id);
+
+            // Debugging full objects for self-signing failure
+            nlohmann::json statusKeyMap;
+            for (const auto &[k, v] : status.verified_device_keys) statusKeyMap[k] = static_cast<int>(v);
+
+            nlohmann::json statusJson;
+            statusJson["user_verified"] = static_cast<int>(status.user_verified);
+            statusJson["verified_devices"] = status.verified_devices;
+            statusJson["verified_device_keys"] = statusKeyMap;
+            statusJson["unverified_device_count"] = status.unverified_device_count;
+            statusJson["no_keys"] = status.no_keys;
+
+            nhlog::crypto()->warn("  Returning early (self-sign fail) with status: {}", statusJson.dump(2));
+            if (theirKeys) {
+                 nhlog::crypto()->warn("  theirKeys: {}", nlohmann::json(*theirKeys).dump(2));
+            }
+
             return status;
         }
 
@@ -6133,13 +6172,17 @@ Cache::verificationStatus_(const std::string &user_id, lmdb::txn &txn)
             (void)device;
             try {
                 auto identkey = device_key.keys.at("curve25519:" + device_key.device_id);
+                nhlog::crypto()->debug("    Checking device {} for user {}: {}", device_key.device_id, user_id, nlohmann::json(device_key).dump(2));
                 if (verifyAtLeastOneSig(device_key, theirKeys->self_signing_keys.keys, user_id)) {
                     status.verified_devices.insert(device_key.device_id);
                     status.verified_device_keys[identkey] = trustlevel;
                     nhlog::crypto()->debug("  {} device {} verified via self-signing key (curve25519={})",
                                           user_id, device_key.device_id, identkey);
                 }
+            } catch (std::exception &e) {
+                nhlog::crypto()->warn("  {} device {} verification failed: {}", user_id, device_key.device_id, e.what());
             } catch (...) {
+                nhlog::crypto()->warn("  {} device {} verification failed: unknown exception", user_id, device_key.device_id);
             }
         }
 
@@ -6147,6 +6190,20 @@ Cache::verificationStatus_(const std::string &user_id, lmdb::txn &txn)
         nhlog::crypto()->debug("  {} final: user_verified={}, verified_devices={}, unverified_count={}",
                               user_id, static_cast<int>(status.user_verified),
                               status.verified_devices.size(), status.unverified_device_count);
+        
+        // Debugging full objects for final return
+        nlohmann::json statusKeyMap;
+        for (const auto &[k, v] : status.verified_device_keys) statusKeyMap[k] = static_cast<int>(v);
+        
+        nlohmann::json statusJson;
+        statusJson["user_verified"] = static_cast<int>(status.user_verified);
+        statusJson["verified_devices"] = status.verified_devices;
+        statusJson["verified_device_keys"] = statusKeyMap;
+        statusJson["unverified_device_count"] = status.unverified_device_count;
+        statusJson["no_keys"] = status.no_keys;
+
+        nhlog::crypto()->warn("  Returning final status: {}", statusJson.dump(2));
+        
         verification_storage.status[user_id] = status;
         return status;
     } catch (std::exception &e) {

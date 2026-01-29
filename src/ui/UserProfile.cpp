@@ -218,8 +218,11 @@ UserProfile::signOutDevice(const QString &deviceID)
       UIA::instance()->genericHandler(tr("Sign out device %1").arg(deviceID)),
       [this, deviceID](mtx::http::RequestErr e) {
           if (e) {
-              nhlog::ui()->critical("Failure when attempting to sign out device {}",
-                                    deviceID.toStdString());
+              nhlog::ui()->critical("Failure when attempting to sign out device {}: {} (http: {}, matrix: {})",
+                                    deviceID.toStdString(),
+                                    e->matrix_error.error,
+                                    static_cast<int>(e->status_code),
+                                    mtx::errors::to_string(e->matrix_error.errcode));
               return;
           }
           nhlog::ui()->info("Device {} successfully signed out!", deviceID.toStdString());

@@ -44,7 +44,13 @@ Image {
         case Crypto.TOFU:
             return deviceId ? qsTr("Encrypted by unverified device %1, but you have trusted that user so far.").arg(deviceId) : qsTr("Encrypted by an unverified device, but you have trusted that user so far.");
         case Crypto.MessageUnverified:
-            return qsTr("Key is from an untrusted source, possibly forwarded from another user or the online key backup. For this reason we can't verify who sent the message.");
+            var msg = qsTr("Key is from an untrusted source, possibly forwarded from another user or the online key backup. For this reason we can't verify who sent the message.");
+            if (encryptionInfo) {
+                if (encryptionInfo.deviceId) msg += "\nDevice ID: " + encryptionInfo.deviceId;
+                if (encryptionInfo.senderKey) msg += "\nSender Key: " + encryptionInfo.senderKey;
+                if (encryptionInfo.sessionId) msg += "\nSession ID: " + encryptionInfo.sessionId;
+            }
+            return msg;
         default:
             return deviceId ? qsTr("Encrypted by unverified device: %1").arg(deviceId) : qsTr("Encrypted by an unverified device.");
         }
