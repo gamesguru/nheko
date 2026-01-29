@@ -1026,6 +1026,7 @@ UserSettingsModel::roleNames() const
       {Values, "values"},
       {Good, "good"},
       {Enabled, "enabled"},
+      {DebugInfo, "debugInfo"},
     };
 
     return roles;
@@ -1746,6 +1747,21 @@ UserSettingsModel::data(const QModelIndex &index, int role) const
             return JdenticonProvider::isAvailable();
         default:
             return true;
+        }
+    } else if (role == DebugInfo) {
+        switch (index.row()) {
+        case OnlineBackupKey:
+            return QString::fromStdString(
+              cache::secret(mtx::secret_storage::secrets::megolm_backup_v1).value_or(""));
+        case SelfSigningKey:
+            return QString::fromStdString(
+              cache::secret(mtx::secret_storage::secrets::cross_signing_self_signing).value_or(""));
+        case UserSigningKey:
+            return QString::fromStdString(
+              cache::secret(mtx::secret_storage::secrets::cross_signing_user_signing).value_or(""));
+        case MasterKey:
+            return QString::fromStdString(
+              cache::secret(mtx::secret_storage::secrets::cross_signing_master).value_or(""));
         }
     }
 

@@ -608,6 +608,7 @@ public:
         Values,
         Good,
         Enabled,
+        DebugInfo,
     };
 
     UserSettingsModel(QObject *parent = nullptr);
