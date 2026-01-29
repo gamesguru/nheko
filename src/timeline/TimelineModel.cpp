@@ -861,9 +861,15 @@ TimelineModel::data(const mtx::events::collections::TimelineEvents &event, int r
             if (auto encrypted =
                   std::get_if<mtx::events::EncryptedEvent<mtx::events::msg::Encrypted>>(
                     &*encrypted_event)) {
-                return olm::calculate_trust(
+                auto res = olm::calculate_trust(
                   encrypted->sender, room_id_.toStdString(), encrypted->content);
+                nhlog::crypto()->debug("Trustlevel logic: calling calculate_trust for {}, result={}", event_id(event), (int)res); 
+                return res;
+            } else {
+                 nhlog::crypto()->debug("Trustlevel logic: event {} is NOT EncryptedEvent", event_id(event));
             }
+        } else {
+             nhlog::crypto()->debug("Trustlevel logic: event {} not found in store", event_id(event));
         }
         return crypto::Trust::Unverified;
     }

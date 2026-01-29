@@ -354,7 +354,10 @@ UserProfile::updateVerificationStatus()
     emit userStatusChanged();
 
     deviceInfo.reserve(devices.size());
-    nhlog::db()->debug("Building device list for user {} with {} devices", userid_.toStdString(), devices.size());
+    nhlog::db()->debug("Building device list for user {} with {} devices. Cache says user_verified={}", userid_.toStdString(), devices.size(), static_cast<int>(verificationStatus.user_verified));
+    for (const auto& vd : verificationStatus.verified_devices) {
+        nhlog::db()->debug("  UserProfile sees verified device: {}", vd);
+    }
     for (const auto &d : devices) {
         auto device = d.second;
         verification::Status verified;
