@@ -1128,6 +1128,8 @@ UserSettingsModel::data(const QModelIndex &index, int role) const
             return tr("Send encrypted messages to verified users only");
         case ShareKeysWithTrustedUsers:
             return tr("Share keys with verified users and devices");
+        case MildKeyWarning:
+            return tr("If enabled, keys from an untrusted source will show an orange shield instead of a red shield.");
         case UseOnlineKeyBackup:
             return tr("Online Key Backup");
         case Profile:
@@ -1296,6 +1298,8 @@ UserSettingsModel::data(const QModelIndex &index, int role) const
             return i->onlyShareKeysWithVerifiedUsers();
         case ShareKeysWithTrustedUsers:
             return i->shareKeysWithTrustedUsers();
+        case MildKeyWarning:
+            return i->mildKeyWarning();
         case UseOnlineKeyBackup:
             return i->useOnlineKeyBackup();
         case Profile:
@@ -1467,8 +1471,9 @@ UserSettingsModel::data(const QModelIndex &index, int role) const
                       "improves safety but makes E2EE more tedious.");
         case ShareKeysWithTrustedUsers:
             return tr(
-              "Automatically replies to key requests from other users if they are verified, "
-              "even if that device shouldn't have access to those keys otherwise.");
+              "Automatically share keys with other users of this account if they request them");
+        case MildKeyWarning:
+            return tr("Show less secure shield for forwarded keys");
         case UseOnlineKeyBackup:
             return tr(
               "Download message encryption keys from and upload to the encrypted online key "
@@ -1579,6 +1584,7 @@ UserSettingsModel::data(const QModelIndex &index, int role) const
         case UseStunServer:
         case OnlyShareKeysWithVerifiedUsers:
         case ShareKeysWithTrustedUsers:
+        case MildKeyWarning:
         case UseOnlineKeyBackup:
         case ExposeDBusApi:
         case UpdateSpaceVias:
@@ -2093,6 +2099,13 @@ UserSettingsModel::setData(const QModelIndex &index, const QVariant &value, int 
             } else
                 return false;
         }
+        case MildKeyWarning: {
+            if (value.userType() == QMetaType::Bool) {
+                i->setMildKeyWarning(value.toBool());
+                return true;
+            } else
+                return false;
+        }
         case UseOnlineKeyBackup: {
             if (value.userType() == QMetaType::Bool) {
                 i->setUseOnlineKeyBackup(value.toBool());
@@ -2383,6 +2396,9 @@ UserSettingsModel::UserSettingsModel(QObject *p)
     connect(s.get(), &UserSettings::shareKeysWithTrustedUsersChanged, this, [this]() {
         emit dataChanged(
           index(ShareKeysWithTrustedUsers), index(ShareKeysWithTrustedUsers), {Value});
+    });
+    connect(s.get(), &UserSettings::mildKeyWarningChanged, this, [this]() {
+        emit dataChanged(index(MildKeyWarning), index(MildKeyWarning), {Value});
     });
     connect(s.get(), &UserSettings::useOnlineKeyBackupChanged, this, [this]() {
         emit dataChanged(index(UseOnlineKeyBackup), index(UseOnlineKeyBackup), {Value});

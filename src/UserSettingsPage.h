@@ -238,6 +238,7 @@ public:
     void setExposeDBusApi(bool state);
     void setUpdateSpaceVias(bool state);
     void setExpireEvents(bool state);
+    void setMildKeyWarning(bool state);
 
     QString theme() const { return !theme_.isEmpty() ? theme_ : defaultTheme_; }
     bool messageHoverHighlight() const { return messageHoverHighlight_; }
@@ -316,6 +317,7 @@ public:
     bool exposeDBusApi() const { return exposeDBusApi_; }
     bool updateSpaceVias() const { return updateSpaceVias_; }
     bool expireEvents() const { return expireEvents_; }
+    bool mildKeyWarning() const { return mildKeyWarning_; }
 
 signals:
     void groupViewStateChanged(bool state);
@@ -460,6 +462,7 @@ private:
     bool exposeDBusApi_;
     bool updateSpaceVias_;
     bool expireEvents_;
+    bool mildKeyWarning_;
 
     QSettings settings;
 
@@ -546,6 +549,7 @@ class UserSettingsModel : public QAbstractListModel
         EncryptionSection,
         OnlyShareKeysWithVerifiedUsers,
         ShareKeysWithTrustedUsers,
+        MildKeyWarning,
         SessionKeys,
         UseOnlineKeyBackup,
         OnlineBackupKey,

@@ -73,9 +73,7 @@ RowLayout {
         sourceSize.width: parent.iconSize
         trust: metadata.trustlevel
         visible: metadata.room.isEncrypted
-        sessionId: metadata.sessionId
-        deviceId: metadata.deviceId
-        senderKey: metadata.senderKey
+        encryptionInfo: metadata.encryptionInfo
     }
     Label {
         id: ts
