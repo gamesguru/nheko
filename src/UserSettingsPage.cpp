@@ -22,8 +22,14 @@
 #include "encryption/Olm.h"
 #include "ui/Theme.h"
 #include "voip/CallDevices.h"
+#include "Logging.h"
 
 #include "config/nheko.h"
+
+#ifdef NHEKO_POSTGRES_SUPPORT
+#include <libpq-fe.h>
+#endif
+
 
 QStringList themes{
   QStringLiteral("light"),
@@ -35,8 +41,6 @@ QSharedPointer<UserSettings> UserSettings::instance_;
 
 UserSettings::UserSettings()
 {
-    connect(
-      QCoreApplication::instance(), &QCoreApplication::aboutToQuit, []() { instance_.clear(); });
 }
 
 QSharedPointer<UserSettings>
@@ -166,6 +170,30 @@ UserSettings::load(std::optional<QString> profile)
 
     if (profile)
         setProfile(profile_);
+}
+
+UserSettings::DatabaseBackend
+UserSettings::databaseBackend() const
+{
+    auto val = settings.value("database/backend", "LMDB").toString();
+
+    if (val == "SQLite") return DatabaseBackend::SQLite;
+    if (val == "LMDB") return DatabaseBackend::LMDB;
+    return DatabaseBackend::LMDB;
+}
+
+void
+UserSettings::setDatabaseBackend(DatabaseBackend value)
+{
+    QString val;
+    switch(value) {
+        case DatabaseBackend::SQLite: val = "SQLite"; break;
+        case DatabaseBackend::LMDB: val = "LMDB"; break;
+        default: val = "LMDB"; break;
+    }
+    settings.setValue("database/backend", val);
+    nhlog::db()->info("User switched database backend to: {}", val.toStdString());
+    emit databaseBackendChanged();
 }
 
 bool
@@ -1227,6 +1255,12 @@ UserSettingsModel::data(const QModelIndex &index, int role) const
             return tr("Periodically update community routing information");
         case ExpireEvents:
             return tr("Periodically delete expired events");
+        case StorageSection:
+            return tr("STORAGE");
+        case DatabaseBackend:
+            return tr("Backend Database");
+        case DatabaseHealth:
+            return tr("Database Connection Status");
         }
     } else if (role == Value) {
         switch (index.row()) {
@@ -1597,6 +1631,12 @@ UserSettingsModel::data(const QModelIndex &index, int role) const
                       "to have one client running this regularly.");
         case IgnoredUsers:
             return tr("Manage your ignored users.");
+        case StorageSection:
+            return tr("Backend Database");
+        case DatabaseBackend:
+            return tr("Database Backend");
+        case DatabaseHealth:
+            return tr("Check if the database connection is working.");
         }
     } else if (role == Type) {
         switch (index.row()) {
@@ -1693,6 +1733,13 @@ UserSettingsModel::data(const QModelIndex &index, int role) const
             return RescanDevs;
         case IgnoredUsers:
             return ManageIgnoredUsers;
+        case StorageSection:
+            return SectionTitle;
+        case DatabaseBackend:
+            return Options;
+
+        case DatabaseHealth:
+            return DatabaseConnectionControl;
         }
     } else if (role == ValueLowerBound) {
         switch (index.row()) {
@@ -1747,6 +1794,11 @@ UserSettingsModel::data(const QModelIndex &index, int role) const
               QStringLiteral("Light"),
               QStringLiteral("Dark"),
               QStringLiteral("System"),
+            };
+        case DatabaseBackend:
+            return QStringList{
+              QStringLiteral("LMDB (v1)"),
+              QStringLiteral("SQLite (v2)"),
             };
         case LogLevel:
             return QStringList{
@@ -1983,6 +2035,7 @@ UserSettingsModel::setData(const QModelIndex &index, const QVariant &value, int 
             } else
                 return false;
         }
+
         case TimelineMaxWidth: {
             if (value.canConvert(QMetaType::fromType<int>())) {
                 i->setTimelineMaxWidth(value.toInt());
@@ -2245,6 +2298,19 @@ UserSettingsModel::setData(const QModelIndex &index, const QVariant &value, int 
                 return true;
             } else
                 return false;
+        }
+        case DatabaseBackend: {
+            auto idx = value.toInt();
+            switch (idx) {
+            case 0:
+                i->setDatabaseBackend(UserSettings::DatabaseBackend::LMDB);
+                return true;
+            case 1:
+                i->setDatabaseBackend(UserSettings::DatabaseBackend::SQLite);
+                return true;
+            }
+
+            return false;
         }
         }
     }
@@ -2553,4 +2619,30 @@ UserSettingsModel::UserSettingsModel(QObject *p)
     });
 }
 
+void
+UserSettingsModel::testDatabaseConnection()
+{
+    auto s = UserSettings::instance();
+    auto backend = s->databaseBackend();
+    
+    if (!cache::isInitialized()) {
+         s->setConnectionStatus(tr("Database not initialized"));
+         return;
+    }
+
+    try {
+         // Perform a lightweight read to verify connectivity
+         auto rooms = cache::roomInfo(false);
+         
+         if (backend == UserSettings::DatabaseBackend::LMDB) {
+              s->setConnectionStatus(tr("LMDB: Connected (Read %n room(s))", "", rooms.size()));
+         } else if (backend == UserSettings::DatabaseBackend::SQLite) {
+              s->setConnectionStatus(tr("SQLite: Connected (Read %n room(s))", "", rooms.size()));
+         }
+    } catch (std::exception &e) {
+         s->setConnectionStatus(tr("Connection Failed: %1").arg(e.what()));
+    }
+}
+
 #include "moc_UserSettingsPage.cpp"
+

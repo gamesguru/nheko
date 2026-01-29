@@ -17,6 +17,7 @@ RowLayout {
     required property string eventId
     required property int status
     required property int trustlevel
+    required property var encryptionInfo
     required property bool isEdited
     required property bool isEncrypted
     required property string threadId
@@ -39,10 +40,10 @@ RowLayout {
         ToolTip.delay: Nheko.tooltipDelay
         ToolTip.text: qsTr("Edited")
         ToolTip.visible: editHovered.hovered
-        source: "image://colorimage/:/icons/icons/ui/edit.svg?" + ((metadata.eventId == metadata.room.edit) ? palette.highlight : palette.buttonText)
+        source: "image://colorimage/:/icons/icons/ui/edit.svg?" + ((metadata.room && metadata.eventId == metadata.room.edit) ? palette.highlight : palette.buttonText)
         sourceSize.height: parent.iconSize
         sourceSize.width: parent.iconSize
-        visible: metadata.isEdited || metadata.eventId == metadata.room.edit
+        visible: metadata.isEdited || (metadata.room && metadata.eventId == metadata.room.edit)
         HoverHandler {
             id: editHovered
 
@@ -59,17 +60,18 @@ RowLayout {
         image: ":/icons/icons/ui/thread.svg"
         visible: metadata.threadId
 
-        onClicked: metadata.room.thread = threadId
+        onClicked: if (metadata.room) metadata.room.thread = threadId
     }
     EncryptionIndicator {
         Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
         Layout.preferredHeight: parent.iconSize
         Layout.preferredWidth: parent.iconSize
         encrypted: metadata.isEncrypted
+        encryptionInfo: metadata.encryptionInfo
         sourceSize.height: parent.iconSize
         sourceSize.width: parent.iconSize
         trust: metadata.trustlevel
-        visible: metadata.room.isEncrypted
+        visible: metadata.room && metadata.room.isEncrypted
     }
     Label {
         id: ts

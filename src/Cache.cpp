@@ -5,6 +5,13 @@
 #include "Cache.h"
 #include "Cache_p.h"
 
+#include "storage/StorageBackend.h"
+#include "storage/LMDBBackend.h"
+#ifdef NHEKO_POSTGRES_SUPPORT
+#include "storage/PostgresBackend.h"
+#endif
+#include "storage/SQLiteBackend.h"
+
 #include <stdexcept>
 #include <unordered_set>
 #include <variant>
@@ -52,7 +59,7 @@ static constexpr std::string_view MAX_DB_SIZE_SETTINGS_KEY{"database/maxsize"};
 //! Keys used for the DB
 static const std::string_view NEXT_BATCH_KEY("next_batch");
 static const std::string_view OLM_ACCOUNT_KEY("olm_account");
-static const std::string_view CACHE_FORMAT_VERSION_KEY("cache_format_version");
+static constexpr std::string_view CACHE_FORMAT_VERSION_KEY("cache_format_version");
 static const std::string_view CURRENT_ONLINE_BACKUP_VERSION("current_online_backup_version");
 
 static constexpr auto MAX_DBS_DEFAULT = 32384U;
@@ -91,6 +98,7 @@ static constexpr auto ENCRYPTED_ROOMS_DB("encrypted_rooms");
 //! Expiration progress for each room
 static constexpr auto EVENT_EXPIRATION_BG_JOB_DB("event_expiration_bg_job");
 
+
 //! room_id -> pickled OlmInboundGroupSession
 static constexpr auto INBOUND_MEGOLM_SESSIONS_DB("inbound_megolm_sessions");
 //! MegolmSessionIndex -> pickled OlmOutboundGroupSession
@@ -106,26 +114,7 @@ bool needsCompact = false;
 using CachedReceipts = std::multimap<uint64_t, std::string, std::greater<uint64_t>>;
 using Receipts       = std::map<std::string, std::map<std::string, uint64_t>>;
 
-struct CacheDb
-{
-    lmdb::env env_ = nullptr;
-    lmdb::dbi syncState;
-    lmdb::dbi rooms;
-    lmdb::dbi spacesChildren, spacesParents;
-    lmdb::dbi invites;
-    lmdb::dbi readReceipts;
-    lmdb::dbi notifications;
-    lmdb::dbi presence;
-
-    lmdb::dbi inboundMegolmSessions;
-    lmdb::dbi outboundMegolmSessions;
-    lmdb::dbi megolmSessionsData;
-    lmdb::dbi olmSessions;
-
-    lmdb::dbi encryptedRooms_;
-
-    lmdb::dbi eventExpiryBgJob_;
-};
+// CacheDb moved to Cache_p.h
 
 Cache::~Cache() noexcept = default;
 
@@ -184,66 +173,186 @@ ro_txn(lmdb::env &env)
 lmdb::dbi
 Cache::getEventsDb(lmdb::txn &txn, const std::string &room_id)
 {
-    return lmdb::dbi::open(txn, std::string(room_id + "/events").c_str(), MDB_CREATE);
+    try {
+        return lmdb::dbi::open(txn, std::string(room_id + "/events").c_str(), 0);
+    } catch (lmdb::error &e) {
+        if (e.code() != MDB_NOTFOUND)
+            throw;
+        try {
+            return lmdb::dbi::open(txn, std::string(room_id + "/events").c_str(), MDB_CREATE);
+        } catch (lmdb::error &e2) {
+            if (e2.code() == EACCES)
+                throw e;
+            throw;
+        }
+    }
 }
 
 lmdb::dbi
 Cache::getEventOrderDb(lmdb::txn &txn, const std::string &room_id)
 {
-    return lmdb::dbi::open(
-      txn, std::string(room_id + "/event_order").c_str(), MDB_CREATE | MDB_INTEGERKEY);
+    try {
+        return lmdb::dbi::open(txn, std::string(room_id + "/event_order").c_str(), MDB_INTEGERKEY);
+    } catch (lmdb::error &e) {
+        if (e.code() != MDB_NOTFOUND)
+            throw;
+        try {
+            return lmdb::dbi::open(
+              txn, std::string(room_id + "/event_order").c_str(), MDB_CREATE | MDB_INTEGERKEY);
+        } catch (lmdb::error &e2) {
+            if (e2.code() == EACCES)
+                throw e;
+            throw;
+        }
+    }
 }
 
 // inverse of EventOrderDb
 lmdb::dbi
 Cache::getEventToOrderDb(lmdb::txn &txn, const std::string &room_id)
 {
-    return lmdb::dbi::open(txn, std::string(room_id + "/event2order").c_str(), MDB_CREATE);
+    try {
+        return lmdb::dbi::open(txn, std::string(room_id + "/event2order").c_str(), 0);
+    } catch (lmdb::error &e) {
+        if (e.code() != MDB_NOTFOUND)
+            throw;
+        try {
+            return lmdb::dbi::open(txn, std::string(room_id + "/event2order").c_str(), MDB_CREATE);
+        } catch (lmdb::error &e2) {
+            if (e2.code() == EACCES)
+                throw e;
+            throw;
+        }
+    }
 }
 
 lmdb::dbi
 Cache::getMessageToOrderDb(lmdb::txn &txn, const std::string &room_id)
 {
-    return lmdb::dbi::open(txn, std::string(room_id + "/msg2order").c_str(), MDB_CREATE);
+    try {
+        return lmdb::dbi::open(txn, std::string(room_id + "/msg2order").c_str(), 0);
+    } catch (lmdb::error &e) {
+        if (e.code() != MDB_NOTFOUND)
+            throw;
+        try {
+            return lmdb::dbi::open(txn, std::string(room_id + "/msg2order").c_str(), MDB_CREATE);
+        } catch (lmdb::error &e2) {
+            if (e2.code() == EACCES)
+                throw e;
+            throw;
+        }
+    }
 }
 
 lmdb::dbi
 Cache::getOrderToMessageDb(lmdb::txn &txn, const std::string &room_id)
 {
-    return lmdb::dbi::open(
-      txn, std::string(room_id + "/order2msg").c_str(), MDB_CREATE | MDB_INTEGERKEY);
+    try {
+        return lmdb::dbi::open(txn, std::string(room_id + "/order2msg").c_str(), MDB_INTEGERKEY);
+    } catch (lmdb::error &e) {
+        if (e.code() != MDB_NOTFOUND)
+            throw;
+        try {
+            return lmdb::dbi::open(
+              txn, std::string(room_id + "/order2msg").c_str(), MDB_CREATE | MDB_INTEGERKEY);
+        } catch (lmdb::error &e2) {
+            if (e2.code() == EACCES)
+                throw e;
+            throw;
+        }
+    }
 }
 
 lmdb::dbi
 Cache::getPendingMessagesDb(lmdb::txn &txn, const std::string &room_id)
 {
-    return lmdb::dbi::open(
-      txn, std::string(room_id + "/pending").c_str(), MDB_CREATE | MDB_INTEGERKEY);
+    try {
+        return lmdb::dbi::open(txn, std::string(room_id + "/pending").c_str(), MDB_INTEGERKEY);
+    } catch (lmdb::error &e) {
+        if (e.code() != MDB_NOTFOUND)
+            throw;
+        try {
+            return lmdb::dbi::open(
+              txn, std::string(room_id + "/pending").c_str(), MDB_CREATE | MDB_INTEGERKEY);
+        } catch (lmdb::error &e2) {
+            if (e2.code() == EACCES)
+                throw e;
+            throw;
+        }
+    }
 }
 
 lmdb::dbi
 Cache::getRelationsDb(lmdb::txn &txn, const std::string &room_id)
 {
-    return lmdb::dbi::open(
-      txn, std::string(room_id + "/related").c_str(), MDB_CREATE | MDB_DUPSORT);
+    try {
+        return lmdb::dbi::open(txn, std::string(room_id + "/related").c_str(), MDB_DUPSORT);
+    } catch (lmdb::error &e) {
+        if (e.code() != MDB_NOTFOUND)
+            throw;
+        try {
+            return lmdb::dbi::open(
+              txn, std::string(room_id + "/related").c_str(), MDB_CREATE | MDB_DUPSORT);
+        } catch (lmdb::error &e2) {
+            if (e2.code() == EACCES)
+                throw e;
+            throw;
+        }
+    }
 }
 
 lmdb::dbi
 Cache::getInviteStatesDb(lmdb::txn &txn, const std::string &room_id)
 {
-    return lmdb::dbi::open(txn, std::string(room_id + "/invite_state").c_str(), MDB_CREATE);
+    try {
+        return lmdb::dbi::open(txn, std::string(room_id + "/invite_state").c_str(), 0);
+    } catch (lmdb::error &e) {
+        if (e.code() != MDB_NOTFOUND)
+            throw;
+        try {
+            return lmdb::dbi::open(txn, std::string(room_id + "/invite_state").c_str(), MDB_CREATE);
+        } catch (lmdb::error &e2) {
+            if (e2.code() == EACCES)
+                throw e;
+            throw;
+        }
+    }
 }
 
 lmdb::dbi
 Cache::getInviteMembersDb(lmdb::txn &txn, const std::string &room_id)
 {
-    return lmdb::dbi::open(txn, std::string(room_id + "/invite_members").c_str(), MDB_CREATE);
+    try {
+        return lmdb::dbi::open(txn, std::string(room_id + "/invite_members").c_str(), 0);
+    } catch (lmdb::error &e) {
+        if (e.code() != MDB_NOTFOUND)
+            throw;
+        try {
+            return lmdb::dbi::open(txn, std::string(room_id + "/invite_members").c_str(), MDB_CREATE);
+        } catch (lmdb::error &e2) {
+            if (e2.code() == EACCES)
+                throw e;
+            throw;
+        }
+    }
 }
 
 lmdb::dbi
 Cache::getStatesDb(lmdb::txn &txn, const std::string &room_id)
 {
-    return lmdb::dbi::open(txn, std::string(room_id + "/state").c_str(), MDB_CREATE);
+    try {
+        return lmdb::dbi::open(txn, std::string(room_id + "/state").c_str(), 0);
+    } catch (lmdb::error &e) {
+        if (e.code() != MDB_NOTFOUND)
+            throw;
+        try {
+            return lmdb::dbi::open(txn, std::string(room_id + "/state").c_str(), MDB_CREATE);
+        } catch (lmdb::error &e2) {
+            if (e2.code() == EACCES)
+                throw e;
+            throw;
+        }
+    }
 }
 
 static int
@@ -264,34 +373,97 @@ compare_state_key(const MDB_val *a, const MDB_val *b)
 lmdb::dbi
 Cache::getStatesKeyDb(lmdb::txn &txn, const std::string &room_id)
 {
-    auto db_ =
-      lmdb::dbi::open(txn, std::string(room_id + "/states_key").c_str(), MDB_CREATE | MDB_DUPSORT);
-    lmdb::dbi_set_dupsort(txn, db_, compare_state_key);
-    return db_;
+    try {
+        auto db_ = lmdb::dbi::open(
+          txn, std::string(room_id + "/states_key").c_str(), MDB_DUPSORT);
+        lmdb::dbi_set_dupsort(txn, db_, compare_state_key);
+        return db_;
+    } catch (lmdb::error &e) {
+        if (e.code() != MDB_NOTFOUND)
+            throw;
+        try {
+            auto db_ = lmdb::dbi::open(
+              txn, std::string(room_id + "/states_key").c_str(), MDB_CREATE | MDB_DUPSORT);
+            lmdb::dbi_set_dupsort(txn, db_, compare_state_key);
+            return db_;
+        } catch (lmdb::error &e2) {
+            if (e2.code() == EACCES)
+                throw e;
+            throw;
+        }
+    }
 }
 
 lmdb::dbi
 Cache::getAccountDataDb(lmdb::txn &txn, const std::string &room_id)
 {
-    return lmdb::dbi::open(txn, std::string(room_id + "/account_data").c_str(), MDB_CREATE);
+    try {
+        return lmdb::dbi::open(txn, std::string(room_id + "/account_data").c_str(), 0);
+    } catch (lmdb::error &e) {
+        if (e.code() != MDB_NOTFOUND)
+            throw;
+        try {
+            return lmdb::dbi::open(txn, std::string(room_id + "/account_data").c_str(), MDB_CREATE);
+        } catch (lmdb::error &e2) {
+            if (e2.code() == EACCES)
+                throw e;
+            throw;
+        }
+    }
 }
 
 lmdb::dbi
 Cache::getMembersDb(lmdb::txn &txn, const std::string &room_id)
 {
-    return lmdb::dbi::open(txn, std::string(room_id + "/members").c_str(), MDB_CREATE);
+    try {
+        return lmdb::dbi::open(txn, std::string(room_id + "/members").c_str(), 0);
+    } catch (lmdb::error &e) {
+        if (e.code() != MDB_NOTFOUND)
+            throw;
+        try {
+            return lmdb::dbi::open(txn, std::string(room_id + "/members").c_str(), MDB_CREATE);
+        } catch (lmdb::error &e2) {
+            if (e2.code() == EACCES)
+                throw e;
+            throw;
+        }
+    }
 }
 
 lmdb::dbi
 Cache::getUserKeysDb(lmdb::txn &txn)
 {
-    return lmdb::dbi::open(txn, "user_key", MDB_CREATE);
+    try {
+        return lmdb::dbi::open(txn, "user_key", 0);
+    } catch (lmdb::error &e) {
+        if (e.code() != MDB_NOTFOUND)
+            throw;
+        try {
+            return lmdb::dbi::open(txn, "user_key", MDB_CREATE);
+        } catch (lmdb::error &e2) {
+            if (e2.code() == EACCES)
+                throw e;
+            throw;
+        }
+    }
 }
 
 lmdb::dbi
 Cache::getVerificationDb(lmdb::txn &txn)
 {
-    return lmdb::dbi::open(txn, "verified", MDB_CREATE);
+    try {
+        return lmdb::dbi::open(txn, "verified", 0);
+    } catch (lmdb::error &e) {
+        if (e.code() != MDB_NOTFOUND)
+            throw;
+        try {
+            return lmdb::dbi::open(txn, "verified", MDB_CREATE);
+        } catch (lmdb::error &e2) {
+            if (e2.code() == EACCES)
+                throw e;
+            throw;
+        }
+    }
 }
 
 QString
@@ -434,6 +606,22 @@ Cache::Cache(const QString &userId, QObject *parent)
       },
       Qt::QueuedConnection);
     setup();
+
+    auto settings = UserSettings::instance();
+    
+    // Initialize storage backend
+    nhlog::db()->info(
+        "Selected database backend: {}", static_cast<int>(settings->databaseBackend()));
+
+    if (settings->databaseBackend() == UserSettings::DatabaseBackend::SQLite) {
+        auto sqlitePath = (cacheDirectory_ + "/nheko.sqlite").toStdString();
+        nhlog::db()->info("Using v2 storage with SQLite backend at: {}", sqlitePath);
+        storage_backend_ = std::make_unique<cache::SQLiteBackend>(sqlitePath);
+    } else {
+        // Default to LMDB (v1) for stability
+        nhlog::db()->info("Using v1 storage with LMDB backend");
+        storage_backend_ = std::make_unique<cache::LMDBBackend>(db.get());
+    }
 }
 
 static QString
@@ -1081,6 +1269,9 @@ Cache::saveInboundMegolmSession(const MegolmSessionIndex &index,
     const auto key     = nlohmann::json(index).dump();
     const auto pickled = pickle<InboundSessionObject>(session.get(), pickle_secret_);
 
+    nhlog::crypto()->debug("saveInboundMegolmSession: room={}, session={}, trusted={}, msg_index={}",
+                          index.room_id, index.session_id, data.trusted, data.message_index);
+
     auto txn = lmdb::txn::begin(db->env_);
 
     std::string_view value;
@@ -1090,10 +1281,14 @@ Cache::saveInboundMegolmSession(const MegolmSessionIndex &index,
         auto newIndex = olm_inbound_group_session_first_known_index(session.get());
         auto oldIndex = olm_inbound_group_session_first_known_index(oldSession.get());
 
+        nhlog::crypto()->debug("  Existing session found: oldIndex={}, newIndex={}", oldIndex, newIndex);
+
         // merge trusted > untrusted
         // first known index minimum
         if (db->megolmSessionsData.get(txn, key, value)) {
             auto oldData = nlohmann::json::parse(value).get<GroupSessionData>();
+            nhlog::crypto()->debug("  Existing data: trusted={}, msg_index={}", oldData.trusted, oldData.message_index);
+
             if (oldData.trusted && newIndex >= oldIndex) {
                 nhlog::crypto()->warn(
                   "Not storing inbound session of lesser trust or bigger index.");
@@ -1103,16 +1298,19 @@ Cache::saveInboundMegolmSession(const MegolmSessionIndex &index,
             oldData.trusted = data.trusted || oldData.trusted;
 
             if (newIndex < oldIndex) {
+                nhlog::crypto()->debug("  Updating session: new index {} < old index {}", newIndex, oldIndex);
                 db->inboundMegolmSessions.put(txn, key, pickled);
                 oldData.message_index = newIndex;
             }
 
+            nhlog::crypto()->debug("  Merged data: trusted={}", oldData.trusted);
             db->megolmSessionsData.put(txn, key, nlohmann::json(oldData).dump());
             txn.commit();
             return;
         }
     }
 
+    nhlog::crypto()->debug("  Storing new session with trusted={}", data.trusted);
     db->inboundMegolmSessions.put(txn, key, pickled);
     db->megolmSessionsData.put(txn, key, nlohmann::json(data).dump());
     txn.commit();
@@ -1275,9 +1473,14 @@ Cache::getMegolmSessionData(const MegolmSessionIndex &index)
 
         std::string_view value;
         if (db->megolmSessionsData.get(txn, nlohmann::json(index).dump(), value)) {
-            return nlohmann::json::parse(value).get<GroupSessionData>();
+            auto data = nlohmann::json::parse(value).get<GroupSessionData>();
+            nhlog::crypto()->debug("getMegolmSessionData: room={}, session={}, trusted={}",
+                                  index.room_id, index.session_id, data.trusted);
+            return data;
         }
 
+        nhlog::crypto()->debug("getMegolmSessionData: room={}, session={} NOT FOUND",
+                              index.room_id, index.session_id);
         return std::nullopt;
     } catch (std::exception &e) {
         nhlog::db()->error("Failed to retrieve Megolm Session Data: {}", e.what());
@@ -1435,7 +1638,13 @@ Cache::restoreOlmAccount()
     auto txn = ro_txn(db->env_);
 
     std::string_view pickled;
-    db->syncState.get(txn, OLM_ACCOUNT_KEY, pickled);
+    try {
+        db->syncState.get(txn, OLM_ACCOUNT_KEY, pickled);
+    } catch (const lmdb::error &e) {
+        if (e.code() != MDB_NOTFOUND)
+            throw;
+        return "";
+    }
 
     return std::string(pickled.data(), pickled.size());
 }
@@ -1499,8 +1708,14 @@ void
 Cache::removeRoom(const std::string &roomid)
 {
     auto txn = lmdb::txn::begin(db->env_, nullptr, 0);
-    db->rooms.del(txn, roomid);
+    removeRoom(txn, roomid);
     txn.commit();
+
+    if (storage_backend_) {
+        auto stxn = storage_backend_->createTransaction();
+        storage_backend_->deleteRoom(*stxn, roomid);
+        stxn->commit();
+    }
 }
 
 void
@@ -2160,7 +2375,16 @@ Cache::updateState(const std::string &room, const mtx::responses::StateEvents &s
         stateskeydb.drop(txn);
     }
 
-    saveStateEvents(txn, statesdb, stateskeydb, membersdb, eventsDb, room, state.events);
+    std::unique_ptr<cache::StorageTransaction> sqlTxn;
+    if (storage_backend_ && storage_backend_->isSql()) {
+        try {
+            sqlTxn = storage_backend_->createTransaction();
+        } catch (std::exception &e) {
+            nhlog::db()->error("Failed to create SQL transaction for room {}: {}", room, e.what());
+        }
+    }
+
+    saveStateEvents(txn, statesdb, stateskeydb, membersdb, eventsDb, room, state.events, sqlTxn.get());
 
     RoomInfo updatedInfo;
 
@@ -2188,6 +2412,17 @@ Cache::updateState(const std::string &room, const mtx::responses::StateEvents &s
     updatedInfo.is_tombstoned = getRoomIsTombstoned(txn, statesdb);
 
     db->rooms.put(txn, room, nlohmann::json(updatedInfo).dump());
+    
+    // Mirror to SQL if enabled
+    if (sqlTxn) {
+         try {
+             storage_backend_->saveRoom(*sqlTxn, room, updatedInfo);
+             sqlTxn->commit();
+         } catch (std::exception &e) {
+             nhlog::db()->error("Failed to mirror room {} to SQL: {}", room, e.what());
+         }
+    }
+
     updateSpaces(txn, {room}, {room});
     txn.commit();
 }
@@ -2294,10 +2529,11 @@ Cache::saveStateEvents(lmdb::txn &txn,
                        lmdb::dbi &membersdb,
                        lmdb::dbi &eventsDb,
                        const std::string &room_id,
-                       const std::vector<T> &events)
+                       const std::vector<T> &events,
+                       cache::StorageTransaction *sqlTxn)
 {
     for (const auto &e : events)
-        saveStateEvent(txn, statesdb, stateskeydb, membersdb, eventsDb, room_id, e);
+        saveStateEvent(txn, statesdb, stateskeydb, membersdb, eventsDb, room_id, e, sqlTxn);
 }
 
 template<class T>
@@ -2308,7 +2544,8 @@ Cache::saveStateEvent(lmdb::txn &txn,
                       lmdb::dbi &membersdb,
                       lmdb::dbi &eventsDb,
                       const std::string &room_id,
-                      const T &event)
+                      const T &event,
+                      cache::StorageTransaction *sqlTxn)
 {
     using namespace mtx::events;
     using namespace mtx::events::state;
@@ -2337,11 +2574,39 @@ Cache::saveStateEvent(lmdb::txn &txn,
               e->content.is_direct,
             };
 
-            membersdb.put(txn, e->state_key, nlohmann::json(tmp).dump());
+            auto memberJson = nlohmann::json(tmp).dump();
+            membersdb.put(txn, e->state_key, memberJson);
+
+            if (sqlTxn) {
+                try {
+                    storage_backend_->saveMember(*sqlTxn, room_id, e->state_key, memberJson, mtx::events::state::membershipToString(e->content.membership));
+                } catch (std::exception &ex) {
+                    nhlog::db()->warn("Failed to save member to SQL: {}", ex.what());
+                }
+            }
             break;
         }
         default: {
             membersdb.del(txn, e->state_key, "");
+
+            if (sqlTxn) {
+                try {
+                    auto display_name =
+                      e->content.display_name.empty() ? e->state_key : e->content.display_name;
+
+                    MemberInfo tmp{
+                      display_name,
+                      e->content.avatar_url,
+                      "",
+                      e->content.reason,
+                      e->content.is_direct,
+                    };
+
+                    storage_backend_->saveMember(*sqlTxn, room_id, e->state_key, nlohmann::json(tmp).dump(), mtx::events::state::membershipToString(e->content.membership));
+                } catch (std::exception &ex) {
+                    nhlog::db()->warn("Failed to soft-delete member from SQL: {}", ex.what());
+                }
+            }
             break;
         }
         }
@@ -2359,9 +2624,19 @@ Cache::saveStateEvent(lmdb::txn &txn,
     }
 
     std::visit(
-      [&txn, &statesdb, &stateskeydb, &eventsDb, &membersdb](const auto &e) {
+      [&txn, &statesdb, &stateskeydb, &eventsDb, &membersdb, sqlTxn, &room_id, this](const auto &e) {
           if constexpr (isStateEvent_<decltype(e)>) {
-              eventsDb.put(txn, e.event_id, nlohmann::json(e).dump());
+              auto eventJson = nlohmann::json(e).dump();
+              eventsDb.put(txn, e.event_id, eventJson);
+
+              if (sqlTxn) {
+                try {
+                    storage_backend_->saveStateEvent(
+                        *sqlTxn, e.event_id, room_id, to_string(e.type), e.state_key, eventJson);
+                } catch (std::exception &ex) {
+                    nhlog::db()->warn("Failed to save state event to SQL: {}", ex.what());
+                }
+              }
 
               if (e.type != EventType::Unsupported) {
                   if (std::is_same_v<std::remove_cv_t<std::remove_reference_t<decltype(e)>>,
@@ -2412,6 +2687,7 @@ try {
     setNextBatchToken(txn, res.next_batch);
 
     if (!res.account_data.events.empty()) {
+        nhlog::db()->debug("Saving account data events: {}", res.account_data.events.size());
         auto accountDataDb = getAccountDataDb(txn, "");
         for (const auto &ev : res.account_data.events)
             std::visit(
@@ -2437,6 +2713,19 @@ try {
     std::set<std::string> spaces_with_updates;
     std::set<std::string> rooms_with_space_updates;
 
+    nhlog::db()->debug("Saving joined rooms: {}", res.rooms.join.size());
+
+    // Create a single SQL transaction for all room mirroring (if using SQL backend)
+    std::unique_ptr<cache::StorageTransaction> sqlTxn;
+    if (storage_backend_ && storage_backend_->isSql()) {
+        nhlog::db()->debug("Creating batched SQL transaction for mirroring");
+        try {
+            sqlTxn = storage_backend_->createTransaction();
+        } catch (std::exception &e) {
+            nhlog::db()->error("Failed to create SQL transaction: {}", e.what());
+        }
+    }
+
     // Save joined rooms
     for (const auto &room : res.rooms.join) {
         auto statesdb    = getStatesDb(txn, room.first);
@@ -2452,12 +2741,15 @@ try {
         //   room.second.account_data.events.size(),
         //   room.second.ephemeral.events.size());
 
+        nhlog::db()->debug("Saving state events for room {}", room.first);
         saveStateEvents(
-          txn, statesdb, stateskeydb, membersdb, eventsDb, room.first, room.second.state.events);
+          txn, statesdb, stateskeydb, membersdb, eventsDb, room.first, room.second.state.events, sqlTxn.get());
         saveStateEvents(
-          txn, statesdb, stateskeydb, membersdb, eventsDb, room.first, room.second.timeline.events);
+          txn, statesdb, stateskeydb, membersdb, eventsDb, room.first, room.second.timeline.events, sqlTxn.get());
 
-        saveTimelineMessages(txn, eventsDb, room.first, room.second.timeline);
+        nhlog::db()->debug("Saving timeline messages for room {}", room.first);
+        saveTimelineMessages(txn, eventsDb, room.first, room.second.timeline, sqlTxn.get());
+        nhlog::db()->debug("Saved timeline messages for room {}", room.first);
 
         RoomInfo updatedInfo;
         std::string_view originalRoomInfoDump;
@@ -2534,9 +2826,11 @@ try {
 
         // Process the account_data associated with this room
         if (!room.second.account_data.events.empty()) {
+            nhlog::db()->debug("Saving per-room account data: {} events", room.second.account_data.events.size());
             auto accountDataDb = getAccountDataDb(txn, room.first);
 
             for (const auto &evt : room.second.account_data.events) {
+                nhlog::db()->debug("Saving account data event");
                 std::visit(
                   [&txn, &accountDataDb](const auto &event) {
                       if constexpr (std::is_same_v<
@@ -2576,11 +2870,22 @@ try {
             // nhlog::db()->critical(
             //   "Writing out new room info:\n{}\n{}", originalRoomInfoDump, newRoomInfoDump);
             db->rooms.put(txn, room.first, newRoomInfoDump);
+
+            // Mirror to SQL backend if enabled
+            if (sqlTxn) {
+                 nhlog::db()->debug("Mirroring room {} to SQL backend", room.first);
+                 try {
+                     storage_backend_->saveRoom(*sqlTxn, room.first, updatedInfo);
+                 } catch (std::exception &e) {
+                     nhlog::db()->error("Failed to mirror room {} to storage backend: {}", room.first, e.what());
+                 }
+            }
         }
 
         for (const auto &e : room.second.ephemeral.events) {
             if (auto receiptsEv =
                   std::get_if<mtx::events::EphemeralEvent<mtx::events::ephemeral::Receipt>>(&e)) {
+                nhlog::db()->debug("Saving read receipts for room {}", room.first);
                 Receipts receipts;
 
                 for (const auto &[event_id, userReceipts] : receiptsEv->content.receipts) {
@@ -2647,6 +2952,19 @@ try {
     }
 
     emit roomReadStatus(readStatus);
+
+    // Commit the batched SQL transaction
+    if (sqlTxn) {
+        nhlog::db()->debug("Committing batched SQL transaction");
+        try {
+            sqlTxn->commit();
+            nhlog::db()->debug("Batched SQL transaction committed");
+        } catch (std::exception &e) {
+            nhlog::db()->error("Failed to commit SQL transaction: {}", e.what());
+        }
+    }
+
+    nhlog::db()->debug("saveState finished successfully");
 } catch (const lmdb::error &lmdbException) {
     if (lmdbException.code() == MDB_DBS_FULL || lmdbException.code() == MDB_MAP_FULL) {
         if (lmdbException.code() == MDB_DBS_FULL) {
@@ -2774,30 +3092,28 @@ Cache::singleRoomInfo(const std::string &room_id)
     auto txn = ro_txn(db->env_);
 
     try {
-        auto statesdb = getStatesDb(txn, room_id);
-
-        std::string_view data;
-
-        // Check if the room is joined.
-        if (db->rooms.get(txn, room_id, data)) {
-            try {
-                RoomInfo tmp     = nlohmann::json::parse(data).get<RoomInfo>();
-                tmp.member_count = getMembersDb(txn, room_id).size(txn);
-                tmp.join_rule    = getRoomJoinRule(txn, statesdb);
-                tmp.guest_access = getRoomGuestAccess(txn, statesdb);
-
-                return tmp;
-            } catch (const nlohmann::json::exception &e) {
-                nhlog::db()->warn("failed to parse room info: room_id ({}), {}: {}",
-                                  room_id,
-                                  std::string(data.data(), data.size()),
-                                  e.what());
+        if (storage_backend_) {
+            auto sqlTxn = storage_backend_->createTransaction();
+            if (sqlTxn) {
+                auto res = storage_backend_->getRoom(*sqlTxn, room_id);
+                if (res)
+                    return *res;
             }
         }
-    } catch (const lmdb::error &e) {
-        nhlog::db()->warn("failed to read room info from db: room_id ({}), {}", room_id, e.what());
+    } catch (std::exception &e) {
+        nhlog::db()->error("Failed to fetch room info from SQL: {}", e.what());
     }
 
+    // Fallback to LMDB
+    std::string_view data;
+    if (db->rooms.get(txn, room_id, data)) {
+        try {
+            RoomInfo info = nlohmann::json::parse(data);
+            return info;
+        } catch (std::exception &e) {
+            nhlog::db()->warn("Failed to parse room info for {}: {}", room_id, e.what());
+        }
+    }
     return RoomInfo();
 }
 void
@@ -2806,27 +3122,30 @@ Cache::updateLastMessageTimestamp(const std::string &room_id, uint64_t ts)
     auto txn = lmdb::txn::begin(db->env_);
 
     try {
-        auto statesdb = getStatesDb(txn, room_id);
-
-        std::string_view data;
-
-        // Check if the room is joined.
-        if (db->rooms.get(txn, room_id, data)) {
+        if (storage_backend_) {
             try {
-                RoomInfo tmp                         = nlohmann::json::parse(data).get<RoomInfo>();
-                tmp.approximate_last_modification_ts = ts;
-                db->rooms.put(txn, room_id, nlohmann::json(tmp).dump());
-                txn.commit();
-                return;
-            } catch (const nlohmann::json::exception &e) {
-                nhlog::db()->warn("failed to parse room info: room_id ({}), {}: {}",
-                                  room_id,
-                                  std::string(data.data(), data.size()),
-                                  e.what());
+                auto sqlTxn = storage_backend_->createTransaction();
+                if (sqlTxn) {
+                    if (auto info = storage_backend_->getRoom(*sqlTxn, room_id)) {
+                        info->approximate_last_modification_ts = ts;
+                        storage_backend_->saveRoom(*sqlTxn, room_id, *info);
+                        sqlTxn->commit();
+                    }
+                }
+            } catch (std::exception &e) {
+                nhlog::db()->warn("Failed to update last message timestamp for {}: {}", room_id, e.what());
             }
         }
-    } catch (const lmdb::error &e) {
-        nhlog::db()->warn("failed to read room info from db: room_id ({}), {}", room_id, e.what());
+
+        std::string_view data;
+        if (db->rooms.get(txn, room_id, data)) {
+            RoomInfo info = nlohmann::json::parse(data);
+            info.approximate_last_modification_ts = ts;
+            db->rooms.put(txn, room_id, nlohmann::json(info).dump());
+            txn.commit();
+        }
+    } catch (std::exception &e) {
+        nhlog::db()->warn("Failed to update last message timestamp in cache: {}", e.what());
     }
 }
 
@@ -2835,48 +3154,20 @@ Cache::getRoomInfo(const std::vector<std::string> &rooms)
 {
     std::map<QString, RoomInfo> room_info;
 
-    // TODO This should be read only.
-    auto txn = lmdb::txn::begin(db->env_);
+    if (!storage_backend_)
+        return room_info;
 
-    for (const auto &room : rooms) {
-        std::string_view data;
-        auto statesdb = getStatesDb(txn, room);
+    try {
+        auto txn = storage_backend_->createTransaction();
 
-        // Check if the room is joined.
-        if (db->rooms.get(txn, room, data)) {
-            try {
-                RoomInfo tmp     = nlohmann::json::parse(data).get<RoomInfo>();
-                tmp.member_count = getMembersDb(txn, room).size(txn);
-                tmp.join_rule    = getRoomJoinRule(txn, statesdb);
-                tmp.guest_access = getRoomGuestAccess(txn, statesdb);
-
-                room_info.emplace(QString::fromStdString(room), std::move(tmp));
-            } catch (const nlohmann::json::exception &e) {
-                nhlog::db()->warn("failed to parse room info: room_id ({}), {}: {}",
-                                  room,
-                                  std::string(data.data(), data.size()),
-                                  e.what());
-            }
-        } else {
-            // Check if the room is an invite.
-            if (db->invites.get(txn, room, data)) {
-                try {
-                    RoomInfo tmp = nlohmann::json::parse(std::string_view(data)).get<RoomInfo>();
-                    tmp.member_count = getInviteMembersDb(txn, room).size(txn);
-
-                    room_info.emplace(QString::fromStdString(room), std::move(tmp));
-                } catch (const nlohmann::json::exception &e) {
-                    nhlog::db()->warn("failed to parse room info for invite: "
-                                      "room_id ({}), {}: {}",
-                                      room,
-                                      std::string(data.data(), data.size()),
-                                      e.what());
-                }
+        for (const auto &room : rooms) {
+            if (auto info = storage_backend_->getRoom(*txn, room)) {
+                room_info.emplace(QString::fromStdString(room), std::move(*info));
             }
         }
+    } catch (std::exception &e) {
+        nhlog::db()->warn("Failed to retrieve room info: {}", e.what());
     }
-
-    txn.commit();
 
     return room_info;
 }
@@ -2884,18 +3175,20 @@ Cache::getRoomInfo(const std::vector<std::string> &rooms)
 std::vector<QString>
 Cache::roomIds()
 {
-    auto txn = ro_txn(db->env_);
+    if (!storage_backend_)
+        return {};
 
-    std::vector<QString> rooms;
-    std::string_view room_id, unused;
-
-    auto roomsCursor = lmdb::cursor::open(txn, db->rooms);
-    while (roomsCursor.get(room_id, unused, MDB_NEXT))
-        rooms.push_back(QString::fromStdString(std::string(room_id)));
-
-    roomsCursor.close();
-
-    return rooms;
+    try {
+        auto txn = storage_backend_->createTransaction();
+        std::vector<QString> rooms;
+        for (const auto &room_id : storage_backend_->getRoomIds(*txn)) {
+            rooms.push_back(QString::fromStdString(room_id));
+        }
+        return rooms;
+    } catch (std::exception &e) {
+        nhlog::db()->warn("Failed to retrieve room ids: {}", e.what());
+        return {};
+    }
 }
 
 std::string
@@ -3022,7 +3315,11 @@ Cache::roomInfo(bool withInvites)
     auto roomsCursor = lmdb::cursor::open(txn, db->rooms);
     while (roomsCursor.get(room_id, room_data, MDB_NEXT)) {
         RoomInfo tmp     = nlohmann::json::parse(std::move(room_data)).get<RoomInfo>();
-        tmp.member_count = getMembersDb(txn, std::string(room_id)).size(txn);
+        try {
+            tmp.member_count = getMembersDb(txn, std::string(room_id)).size(txn);
+        } catch (lmdb::error &) {
+            tmp.member_count = 0;
+        }
         result.insert(QString::fromStdString(std::string(room_id)), std::move(tmp));
     }
     roomsCursor.close();
@@ -3032,7 +3329,11 @@ Cache::roomInfo(bool withInvites)
         auto invitesCursor = lmdb::cursor::open(txn, db->invites);
         while (invitesCursor.get(room_id, room_data, MDB_NEXT)) {
             RoomInfo tmp     = nlohmann::json::parse(room_data).get<RoomInfo>();
-            tmp.member_count = getInviteMembersDb(txn, std::string(room_id)).size(txn);
+            try {
+                tmp.member_count = getInviteMembersDb(txn, std::string(room_id)).size(txn);
+            } catch (lmdb::error &) {
+                tmp.member_count = 0;
+            }
             result.insert(QString::fromStdString(std::string(room_id)), std::move(tmp));
         }
         invitesCursor.close();
@@ -3085,7 +3386,7 @@ Cache::getLastEventId(lmdb::txn &txn, const std::string &room_id)
     lmdb::dbi orderDb;
     try {
         orderDb = getOrderToMessageDb(txn, room_id);
-    } catch (lmdb::runtime_error &e) {
+    } catch (lmdb::error &e) {
         nhlog::db()->error(
           "Can't open db for room '{}', probably doesn't exist yet. ({})", room_id, e.what());
         return {};
@@ -3108,7 +3409,7 @@ Cache::getTimelineRange(const std::string &room_id)
     lmdb::dbi orderDb;
     try {
         orderDb = getOrderToMessageDb(txn, room_id);
-    } catch (lmdb::runtime_error &e) {
+    } catch (lmdb::error &e) {
         nhlog::db()->error(
           "Can't open db for room '{}', probably doesn't exist yet. ({})", room_id, e.what());
         return {};
@@ -3142,7 +3443,7 @@ Cache::getTimelineIndex(const std::string &room_id, std::string_view event_id)
     lmdb::dbi orderDb;
     try {
         orderDb = getMessageToOrderDb(txn, room_id);
-    } catch (lmdb::runtime_error &e) {
+    } catch (lmdb::error &e) {
         nhlog::db()->error(
           "Can't open db for room '{}', probably doesn't exist yet. ({})", room_id, e.what());
         return {};
@@ -3169,7 +3470,7 @@ Cache::getEventIndex(const std::string &room_id, std::string_view event_id)
     lmdb::dbi orderDb;
     try {
         orderDb = getEventToOrderDb(txn, room_id);
-    } catch (lmdb::runtime_error &e) {
+    } catch (lmdb::error &e) {
         nhlog::db()->error(
           "Can't open db for room '{}', probably doesn't exist yet. ({})", room_id, e.what());
         return {};
@@ -3200,7 +3501,7 @@ Cache::lastInvisibleEventAfter(const std::string &room_id, std::string_view even
         orderDb      = getEventToOrderDb(txn, room_id);
         eventOrderDb = getEventOrderDb(txn, room_id);
         timelineDb   = getMessageToOrderDb(txn, room_id);
-    } catch (lmdb::runtime_error &e) {
+    } catch (lmdb::error &e) {
         nhlog::db()->error(
           "Can't open db for room '{}', probably doesn't exist yet. ({})", room_id, e.what());
         return {};
@@ -3275,7 +3576,7 @@ Cache::lastVisibleEvent(const std::string &room_id, std::string_view event_id)
         }
 
         return std::pair{idx, evId};
-    } catch (lmdb::runtime_error &e) {
+    } catch (lmdb::error &e) {
         nhlog::db()->error("Failed to get last visible event after {}", event_id, e.what());
         return {};
     }
@@ -3288,7 +3589,7 @@ Cache::getTimelineEventId(const std::string &room_id, uint64_t index)
     lmdb::dbi orderDb;
     try {
         orderDb = getOrderToMessageDb(txn, room_id);
-    } catch (lmdb::runtime_error &e) {
+    } catch (lmdb::error &e) {
         nhlog::db()->error(
           "Can't open db for room '{}', probably doesn't exist yet. ({})", room_id, e.what());
         return {};
@@ -3321,6 +3622,12 @@ Cache::invites()
             result.insert(QString::fromStdString(std::string(room_id)), std::move(tmp));
         } catch (const nlohmann::json::exception &e) {
             nhlog::db()->warn("failed to parse room info for invite: "
+                              "room_id ({}), {}: {}",
+                              room_id,
+                              std::string(room_data),
+                              e.what());
+        } catch (const lmdb::error &e) {
+            nhlog::db()->warn("failed to retrieve invite members for: "
                               "room_id ({}), {}: {}",
                               room_id,
                               std::string(room_data),
@@ -4066,7 +4373,8 @@ void
 Cache::saveTimelineMessages(lmdb::txn &txn,
                             lmdb::dbi &eventsDb,
                             const std::string &room_id,
-                            const mtx::responses::Timeline &res)
+                            const mtx::responses::Timeline &res,
+                            cache::StorageTransaction *sqlTxn)
 {
     if (res.events.empty())
         return;
@@ -4115,6 +4423,69 @@ Cache::saveTimelineMessages(lmdb::txn &txn,
         }
 
         std::string_view event_id = event_id_val;
+
+        if (sqlTxn) {
+            try {
+                storage_backend_->saveEvent(*sqlTxn, event_id_val, room_id, event.dump());
+
+                // Media metadata extraction
+                std::visit(
+                  [this, sqlTxn, &event_id_val, &room_id](const auto &ev) {
+                      using EventT = std::remove_cvref_t<decltype(ev)>;
+                      if constexpr (std::is_same_v<EventT,
+                                                   mtx::events::RoomEvent<mtx::events::msg::Image>>) {
+                          storage_backend_->saveMediaMetadata(*sqlTxn,
+                                                              event_id_val,
+                                                              room_id,
+                                                              ev.content.body,
+                                                              ev.content.info.mimetype,
+                                                              ev.content.info.size,
+                                                              (int)ev.content.info.w,
+                                                              (int)ev.content.info.h,
+                                                              ev.content.info.blurhash);
+                      } else if constexpr (std::is_same_v<
+                                             EventT,
+                                             mtx::events::RoomEvent<mtx::events::msg::Video>>) {
+                          storage_backend_->saveMediaMetadata(*sqlTxn,
+                                                              event_id_val,
+                                                              room_id,
+                                                              ev.content.body,
+                                                              ev.content.info.mimetype,
+                                                              ev.content.info.size,
+                                                              (int)ev.content.info.w,
+                                                              (int)ev.content.info.h,
+                                                              ev.content.info.blurhash);
+                      } else if constexpr (std::is_same_v<
+                                             EventT,
+                                             mtx::events::RoomEvent<mtx::events::msg::Audio>>) {
+                          storage_backend_->saveMediaMetadata(*sqlTxn,
+                                                              event_id_val,
+                                                              room_id,
+                                                              ev.content.body,
+                                                              ev.content.info.mimetype,
+                                                              ev.content.info.size,
+                                                              0,
+                                                              0,
+                                                              "");
+                      } else if constexpr (std::is_same_v<
+                                             EventT,
+                                             mtx::events::RoomEvent<mtx::events::msg::File>>) {
+                          storage_backend_->saveMediaMetadata(*sqlTxn,
+                                                              event_id_val,
+                                                              room_id,
+                                                              ev.content.body,
+                                                              ev.content.info.mimetype,
+                                                              ev.content.info.size,
+                                                              0,
+                                                              0,
+                                                              "");
+                      }
+                  },
+                  e);
+            } catch (std::exception &e) {
+                nhlog::db()->warn("Failed to mirror event {} to SQL: {}", event_id_val, e.what());
+            }
+        }
 
         nlohmann::json orderEntry = nlohmann::json::object();
         orderEntry["event_id"]    = event_id_val;
@@ -4261,10 +4632,19 @@ Cache::saveOldMessages(const std::string &room_id, const mtx::responses::Message
 {
     auto txn         = lmdb::txn::begin(db->env_);
     auto eventsDb    = getEventsDb(txn, room_id);
-    auto relationsDb = getRelationsDb(txn, room_id);
+    // Create a single SQL transaction for backfill mirroring
+    std::unique_ptr<cache::StorageTransaction> sqlTxn;
+    if (storage_backend_ && storage_backend_->isSql()) {
+        try {
+            sqlTxn = storage_backend_->createTransaction();
+        } catch (std::exception &e) {
+            nhlog::db()->error("Failed to create SQL transaction for backfill: {}", e.what());
+        }
+    }
 
     auto orderDb     = getEventOrderDb(txn, room_id);
     auto evToOrderDb = getEventToOrderDb(txn, room_id);
+    auto relationsDb = getRelationsDb(txn, room_id); // Moved this line here
     auto msg2orderDb = getMessageToOrderDb(txn, room_id);
     auto order2msgDb = getOrderToMessageDb(txn, room_id);
 
@@ -4327,6 +4707,14 @@ Cache::saveOldMessages(const std::string &room_id, const mtx::responses::Message
         }
         eventsDb.put(txn, event_id, event.dump());
 
+        if (sqlTxn) {
+            try {
+                storage_backend_->saveEvent(*sqlTxn, event_id_val, room_id, event.dump());
+            } catch (std::exception &e) {
+                nhlog::db()->warn("Failed to mirror old event {} to SQL: {}", event_id_val, e.what());
+            }
+        }
+
         auto relations = mtx::accessors::relations(e);
         if (!relations.relations.empty()) {
             for (const auto &r : relations.relations) {
@@ -4357,6 +4745,14 @@ Cache::saveOldMessages(const std::string &room_id, const mtx::responses::Message
         orderEntry["event_id"]   = event_id_val;
         orderEntry["prev_batch"] = res.end;
         orderDb.put(txn, lmdb::to_sv(index), orderEntry.dump());
+    }
+
+    if (sqlTxn) {
+        try {
+            sqlTxn->commit();
+        } catch (std::exception &e) {
+            nhlog::db()->warn("Failed to commit SQL transaction for old messages: {}", e.what());
+        }
     }
 
     txn.commit();
@@ -4488,6 +4884,17 @@ Cache::isNotificationSent(const std::string &event_id)
 std::vector<std::string>
 Cache::getRoomIds(lmdb::txn &txn)
 {
+    if (storage_backend_) {
+        try {
+            auto sqlTxn = storage_backend_->createTransaction();
+            if (sqlTxn) {
+                return storage_backend_->getRoomIds(*sqlTxn);
+            }
+        } catch (std::exception &e) {
+            nhlog::db()->error("Failed to retrieve room IDs from SQL: {}", e.what());
+        }
+    }
+
     auto cursor = lmdb::cursor::open(txn, db->rooms);
 
     std::vector<std::string> rooms;
@@ -5509,16 +5916,17 @@ Cache::markDeviceVerified(const std::string &user_id, const std::string &key)
                 verified_state = nlohmann::json::parse(val).get<VerificationCache>();
             }
 
-            for (const auto &device : verified_state.device_verified)
-                if (device == key)
-                    return;
+            bool already_verified = verified_state.device_verified.count(key);
 
-            verified_state.device_verified.insert(key);
-            db_.put(txn, user_id, nlohmann::json(verified_state).dump());
-            txn.commit();
+            if (!already_verified) {
+                verified_state.device_verified.insert(key);
+                db_.put(txn, user_id, nlohmann::json(verified_state).dump());
+                txn.commit();
+            }
         } catch (std::exception &) {
         }
     }
+
 
     const auto local_user = utils::localUser().toStdString();
     std::map<std::string, VerificationStatus> tmp;
@@ -5593,8 +6001,12 @@ VerificationStatus
 Cache::verificationStatus_(const std::string &user_id, lmdb::txn &txn)
 {
     std::unique_lock<std::mutex> lock(verification_storage.verification_storage_mtx);
-    if (verification_storage.status.count(user_id))
+    if (verification_storage.status.count(user_id)) {
+        nhlog::crypto()->debug("verificationStatus: {} (cached)", user_id);
         return verification_storage.status.at(user_id);
+    }
+
+    nhlog::crypto()->debug("verificationStatus: {} (calculating...)", user_id);
 
     VerificationStatus status;
 
@@ -5605,6 +6017,8 @@ Cache::verificationStatus_(const std::string &user_id, lmdb::txn &txn)
 
     if (auto verifCache = verificationCache(user_id, txn)) {
         status.verified_devices = verifCache->device_verified;
+        nhlog::crypto()->debug("  {} has {} manually verified devices in cache",
+                              user_id, status.verified_devices.size());
     }
 
     const auto local_user = utils::localUser().toStdString();
@@ -5612,7 +6026,10 @@ Cache::verificationStatus_(const std::string &user_id, lmdb::txn &txn)
     crypto::Trust trustlevel = crypto::Trust::Unverified;
     if (user_id == local_user) {
         status.verified_devices.insert(http::client()->device_id());
+        // Handle empty self-queries sent by Conduit/Continuwuity
+        status.verified_device_keys[olm::client()->identity_keys().curve25519] = crypto::Trust::Verified;
         trustlevel = crypto::Trust::Verified;
+        nhlog::crypto()->debug("  {} is local user, injecting own device_id and key: {}", user_id, olm::client()->identity_keys().curve25519);
     }
 
     auto verifyAtLeastOneSig = [](const auto &toVerif,
@@ -5653,10 +6070,16 @@ Cache::verificationStatus_(const std::string &user_id, lmdb::txn &txn)
         // key and their master key
         auto ourKeys   = userKeys_(local_user, txn);
         auto theirKeys = userKeys_(user_id, txn);
-        if (theirKeys)
+        if (theirKeys) {
             status.no_keys = false;
+            nhlog::crypto()->debug("  {} has {} device keys", user_id, theirKeys->device_keys.size());
+        } else {
+            nhlog::crypto()->debug("  {} has no keys in cache", user_id);
+        }
 
         if (!ourKeys || !theirKeys) {
+            nhlog::crypto()->debug("  {} result: no_keys={}, unverified_count={}",
+                                  user_id, status.no_keys, status.unverified_device_count);
             verification_storage.status[user_id] = status;
             return status;
         }
@@ -5671,7 +6094,28 @@ Cache::verificationStatus_(const std::string &user_id, lmdb::txn &txn)
                 !mtx::crypto::ed25519_verify_signature(olm::client()->identity_keys().ed25519,
                                                        nlohmann::json(mk),
                                                        mk.signatures.at(local_user).at(dev_id))) {
-                nhlog::crypto()->debug("We have not verified our own master key");
+                nhlog::crypto()->warn("We have not verified our own master key");
+                nhlog::crypto()->warn("  - has signature from local_user? {}", mk.signatures.count(local_user));
+                if (mk.signatures.count(local_user))
+                    nhlog::crypto()->warn("  - has signature for device {}? {}", dev_id, mk.signatures.at(local_user).count(dev_id));
+                nhlog::crypto()->warn("  - ed25519 identity key: {}", olm::client()->identity_keys().ed25519);
+                
+                // Debugging full objects as requested
+                nlohmann::json statusKeyMap;
+                for (const auto &[k, v] : status.verified_device_keys) statusKeyMap[k] = static_cast<int>(v);
+                
+                nlohmann::json statusJson;
+                statusJson["user_verified"] = static_cast<int>(status.user_verified);
+                statusJson["verified_devices"] = status.verified_devices;
+                statusJson["verified_device_keys"] = statusKeyMap;
+                statusJson["unverified_device_count"] = status.unverified_device_count;
+                statusJson["no_keys"] = status.no_keys;
+
+                nhlog::crypto()->warn("  Returning with status: {}", statusJson.dump(2));
+                if (theirKeys) {
+                     nhlog::crypto()->warn("  theirKeys: {}", nlohmann::json(*theirKeys).dump(2));
+                }
+
                 verification_storage.status[user_id] = status;
                 return status;
             }
@@ -5685,11 +6129,14 @@ Cache::verificationStatus_(const std::string &user_id, lmdb::txn &txn)
               verifyAtLeastOneSig(
                 theirKeys->master_keys, ourKeys->user_signing_keys.keys, local_user);
 
-            if (theirMasterKeyVerified)
+            if (theirMasterKeyVerified) {
                 trustlevel = crypto::Trust::Verified;
-            else if (!theirKeys->master_key_changed)
+                nhlog::crypto()->debug("  {} master key is verified via cross-signing", user_id);
+            } else if (!theirKeys->master_key_changed) {
                 trustlevel = crypto::Trust::TOFU;
-            else {
+                nhlog::crypto()->debug("  {} master key is TOFU (not changed)", user_id);
+            } else {
+                nhlog::crypto()->debug("  {} master key changed and not verified", user_id);
                 verification_storage.status[user_id] = status;
                 return status;
             }
@@ -5700,22 +6147,69 @@ Cache::verificationStatus_(const std::string &user_id, lmdb::txn &txn)
         status.user_verified = trustlevel;
 
         verification_storage.status[user_id] = status;
-        if (!verifyAtLeastOneSig(theirKeys->self_signing_keys, master_keys, user_id))
+        if (!verifyAtLeastOneSig(theirKeys->self_signing_keys, master_keys, user_id)) {
+            nhlog::crypto()->warn("  {} self-signing key not verified by master key", user_id);
+
+            // Debugging full objects for self-signing failure
+            nlohmann::json statusKeyMap;
+            for (const auto &[k, v] : status.verified_device_keys) statusKeyMap[k] = static_cast<int>(v);
+
+            nlohmann::json statusJson;
+            statusJson["user_verified"] = static_cast<int>(status.user_verified);
+            statusJson["verified_devices"] = status.verified_devices;
+            statusJson["verified_device_keys"] = statusKeyMap;
+            statusJson["unverified_device_count"] = status.unverified_device_count;
+            statusJson["no_keys"] = status.no_keys;
+
+            nhlog::crypto()->warn("  Returning early (self-sign fail) with status: {}", statusJson.dump(2));
+            if (theirKeys) {
+                 nhlog::crypto()->warn("  theirKeys: {}", nlohmann::json(*theirKeys).dump(2));
+            }
+
             return status;
+        }
 
         for (const auto &[device, device_key] : theirKeys->device_keys) {
             (void)device;
             try {
                 auto identkey = device_key.keys.at("curve25519:" + device_key.device_id);
+                nhlog::crypto()->debug("    Checking device {} for user {}: {}", device_key.device_id, user_id, nlohmann::json(device_key).dump(2));
                 if (verifyAtLeastOneSig(device_key, theirKeys->self_signing_keys.keys, user_id)) {
                     status.verified_devices.insert(device_key.device_id);
                     status.verified_device_keys[identkey] = trustlevel;
+                    nhlog::crypto()->debug("  {} device {} verified via self-signing key (curve25519={})",
+                                          user_id, device_key.device_id, identkey);
                 }
+            } catch (std::exception &e) {
+                nhlog::crypto()->warn("  {} device {} verification failed: {}", user_id, device_key.device_id, e.what());
             } catch (...) {
+                nhlog::crypto()->warn("  {} device {} verification failed: unknown exception", user_id, device_key.device_id);
             }
         }
 
         updateUnverifiedDevices(theirKeys->device_keys);
+        nhlog::crypto()->debug("  {} final: user_verified={}, verified_devices={}, unverified_count={}",
+                              user_id, static_cast<int>(status.user_verified),
+                              status.verified_devices.size(), status.unverified_device_count);
+        
+        if (status.verified_devices.size() != status.verified_device_keys.size()) {
+            nhlog::crypto()->warn("  {} consistency check failed: {} verified devices but only {} verified keys!", 
+                user_id, status.verified_devices.size(), status.verified_device_keys.size());
+        }
+
+        // Debugging full objects for final return
+        nlohmann::json statusKeyMap;
+        for (const auto &[k, v] : status.verified_device_keys) statusKeyMap[k] = static_cast<int>(v);
+        
+        nlohmann::json statusJson;
+        statusJson["user_verified"] = static_cast<int>(status.user_verified);
+        statusJson["verified_devices"] = status.verified_devices;
+        statusJson["verified_device_keys"] = statusKeyMap;
+        statusJson["unverified_device_count"] = status.unverified_device_count;
+        statusJson["no_keys"] = status.no_keys;
+
+        nhlog::crypto()->warn("  Returning final status: {}", statusJson.dump(2));
+        
         verification_storage.status[user_id] = status;
         return status;
     } catch (std::exception &e) {
@@ -5925,6 +6419,12 @@ void
 init(const QString &user_id)
 {
     instance_ = std::make_unique<Cache>(user_id);
+}
+
+void
+teardown()
+{
+    instance_.reset();
 }
 
 Cache *
@@ -6169,16 +6669,24 @@ lastVisibleEvent(const std::string &room_id, std::string_view event_id)
     return instance_->lastVisibleEvent(room_id, event_id);
 }
 
+
+
+std::map<QString, RoomInfo>
+getRoomInfo(const std::vector<std::string> &rooms)
+{
+    return instance_->getRoomInfo(rooms);
+}
+
 RoomInfo
 singleRoomInfo(const std::string &room_id)
 {
     return instance_->singleRoomInfo(room_id);
 }
 
-std::map<QString, RoomInfo>
-getRoomInfo(const std::vector<std::string> &rooms)
+std::vector<std::string>
+getRoomIds(lmdb::txn &txn)
 {
-    return instance_->getRoomInfo(rooms);
+    return instance_->getRoomIds(txn);
 }
 
 //! Calculates which the read status of a room.
@@ -6228,12 +6736,7 @@ deleteOldData() noexcept
 {
     instance_->deleteOldData();
 }
-//! Retrieve all saved room ids.
-std::vector<std::string>
-getRoomIds(lmdb::txn &txn)
-{
-    return instance_->getRoomIds(txn);
-}
+
 
 //! Mark a room that uses e2e encryption.
 void

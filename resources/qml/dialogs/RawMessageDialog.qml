@@ -17,11 +17,12 @@ ApplicationWindow {
     flags: Qt.Tool | Qt.WindowStaysOnTopHint | Qt.WindowCloseButtonHint | Qt.WindowTitleHint
 
     Shortcut {
-        sequence: StandardKey.Cancel
+        sequences: [StandardKey.Cancel]
         onActivated: rawMessageRoot.close()
     }
 
     ScrollView {
+        id: scrollView
         anchors.margins: Nheko.paddingMedium
         anchors.fill: parent
         padding: Nheko.paddingMedium
@@ -33,15 +34,15 @@ ApplicationWindow {
             color: palette.text
             readOnly: true
             textFormat: Text.PlainText
+            selectByMouse: true
 
-            anchors.fill: parent
+            width: Math.max(scrollView.availableWidth, implicitWidth)
+            height: Math.max(scrollView.availableHeight, implicitHeight)
 
             background: Rectangle {
                 color: palette.base
             }
-
         }
-
     }
 
     footer: DialogButtonBox {

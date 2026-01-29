@@ -101,6 +101,7 @@ class UserSettings final : public QObject
     Q_PROPERTY(bool useOnlineKeyBackup READ useOnlineKeyBackup WRITE setUseOnlineKeyBackup NOTIFY
                  useOnlineKeyBackupChanged)
     Q_PROPERTY(QString profile READ profile WRITE setProfile NOTIFY profileChanged)
+    Q_PROPERTY(DatabaseBackend databaseBackend READ databaseBackend WRITE setDatabaseBackend NOTIFY databaseBackendChanged)
     Q_PROPERTY(QString userId READ userId WRITE setUserId NOTIFY userIdChanged)
     Q_PROPERTY(QString accessToken READ accessToken WRITE setAccessToken NOTIFY accessTokenChanged)
     Q_PROPERTY(QString deviceId READ deviceId WRITE setDeviceId NOTIFY deviceIdChanged)
@@ -113,6 +114,8 @@ class UserSettings final : public QObject
     Q_PROPERTY(bool openVideoExternal READ openVideoExternal WRITE setOpenVideoExternal NOTIFY
                  openVideoExternalChanged)
     Q_PROPERTY(QString logLevel READ logLevel WRITE setLogLevel NOTIFY logLevelChanged)
+    Q_PROPERTY(QString connectionStatus READ connectionStatus NOTIFY connectionStatusChanged)
+
 
     Q_PROPERTY(QStringList hiddenPins READ hiddenPins WRITE setHiddenPins NOTIFY hiddenPinsChanged)
     Q_PROPERTY(QStringList recentReactions READ recentReactions WRITE setRecentReactions NOTIFY
@@ -169,6 +172,13 @@ public:
         Never,
     };
     Q_ENUM(ShowImage)
+
+    enum class DatabaseBackend
+    {
+        LMDB = 0,
+        SQLite = 10,
+    };
+    Q_ENUM(DatabaseBackend)
 
     void save();
     void load(std::optional<QString> profile);
@@ -245,6 +255,18 @@ public:
     void setExpireEvents(bool state);
     void setMildKeyWarning(bool state);
     void setLogLevel(QString level);
+
+    DatabaseBackend databaseBackend() const;
+    void setDatabaseBackend(DatabaseBackend value);
+
+    QString connectionStatus() const { return connectionStatus_; }
+    void setConnectionStatus(QString status)
+    {
+        if (connectionStatus_ != status) {
+            connectionStatus_ = status;
+            emit connectionStatusChanged();
+        }
+    }
 
     QString theme() const { return !theme_.isEmpty() ? theme_ : defaultTheme_; }
     bool messageHoverHighlight() const { return messageHoverHighlight_; }
@@ -396,6 +418,8 @@ signals:
     void expireEventsChanged(bool state);
     void mildKeyWarningChanged(bool state);
     void logLevelChanged(QString level);
+    void databaseBackendChanged();
+    void connectionStatusChanged();
 
 private:
     // Default to system theme if QT_QPA_PLATFORMTHEME var is set.
@@ -476,6 +500,7 @@ private:
     bool expireEvents_;
     bool mildKeyWarning_;
     QString logLevel_;
+    QString connectionStatus_ = "Unknown"; // Default status
 
     QSettings settings;
 
@@ -582,6 +607,11 @@ class UserSettingsModel : public QAbstractListModel
         Version,
         Platform,
         LogLevel,
+
+        StorageSection,
+        DatabaseBackend,
+        DatabaseHealth,
+
         COUNT,
         // hidden for now
         AccessToken,
@@ -610,7 +640,10 @@ public:
         ManageIgnoredUsers,
         DeviceOptions,
         RescanDevs,
+        EditableText,
+        DatabaseConnectionControl,
     };
+
     Q_ENUM(Types);
 
     enum Roles
@@ -642,4 +675,5 @@ public:
     Q_INVOKABLE void requestCrossSigningSecrets();
     Q_INVOKABLE void downloadCrossSigningSecrets();
     Q_INVOKABLE void refreshDevices();
+    Q_INVOKABLE void testDatabaseConnection();
 };

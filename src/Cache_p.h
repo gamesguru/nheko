@@ -23,12 +23,42 @@ struct Messages;
 struct StateEvents;
 }
 
+namespace cache {
+class StorageBackend;
+class StorageTransaction;
+}
+
 namespace lmdb {
 class txn;
 class dbi;
 }
 
-struct CacheDb;
+#if __has_include(<lmdbxx/lmdb++.h>)
+#include <lmdbxx/lmdb++.h>
+#else
+#include <lmdb++.h>
+#endif
+
+struct CacheDb
+{
+    lmdb::env env_ = nullptr;
+    lmdb::dbi syncState;
+    lmdb::dbi rooms;
+    lmdb::dbi spacesChildren, spacesParents;
+    lmdb::dbi invites;
+    lmdb::dbi readReceipts;
+    lmdb::dbi notifications;
+    lmdb::dbi presence;
+
+    lmdb::dbi inboundMegolmSessions;
+    lmdb::dbi outboundMegolmSessions;
+    lmdb::dbi megolmSessionsData;
+    lmdb::dbi olmSessions;
+
+    lmdb::dbi encryptedRooms_;
+
+    lmdb::dbi eventExpiryBgJob_;
+};
 
 class Cache final : public QObject
 {
@@ -333,7 +363,8 @@ private:
     void saveTimelineMessages(lmdb::txn &txn,
                               lmdb::dbi &eventsDb,
                               const std::string &room_id,
-                              const mtx::responses::Timeline &res);
+                              const mtx::responses::Timeline &res,
+                              cache::StorageTransaction *sqlTxn = nullptr);
 
     //! retrieve a specific event from account data
     //! pass empty room_id for global account data
@@ -350,7 +381,8 @@ private:
                          lmdb::dbi &membersdb,
                          lmdb::dbi &eventsDb,
                          const std::string &room_id,
-                         const std::vector<T> &events);
+                         const std::vector<T> &events,
+                         cache::StorageTransaction *sqlTxn = nullptr);
 
     template<class T>
     void saveStateEvent(lmdb::txn &txn,
@@ -359,7 +391,8 @@ private:
                         lmdb::dbi &membersdb,
                         lmdb::dbi &eventsDb,
                         const std::string &room_id,
-                        const T &event);
+                        const T &event,
+                        cache::StorageTransaction *sqlTxn = nullptr);
 
     template<typename T>
     std::optional<mtx::events::StateEvent<T>>
@@ -435,6 +468,7 @@ private:
     bool databaseReady_ = false;
 
     std::unique_ptr<CacheDb> db;
+    std::unique_ptr<cache::StorageBackend> storage_backend_;
 };
 
 namespace cache {

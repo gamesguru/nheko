@@ -24,7 +24,7 @@ ApplicationWindow {
     title: qsTr("Explore Public Rooms")
 
     Shortcut {
-        sequence: StandardKey.Cancel
+        sequences: [StandardKey.Cancel]
         onActivated: roomDirectoryWindow.close()
     }
 

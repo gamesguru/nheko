@@ -128,6 +128,20 @@ Rectangle {
                             }
                         }
                         DelegateChoice {
+                            roleValue: UserSettingsModel.DatabaseConnectionControl
+                            RowLayout {
+                                Button {
+                                    text: qsTr("REFRESH")
+                                    onClicked: UserSettingsModel.testDatabaseConnection()
+                                }
+                                Label {
+                                    text: qsTr("Status: %1").arg(Settings.connectionStatus)
+                                    color: palette.text
+                                }
+
+                            }
+                        }
+                        DelegateChoice {
                             roleValue: UserSettingsModel.Integer
 
                             SpinBox {
@@ -187,6 +201,23 @@ Rectangle {
                                 text: model.value
                                 readOnly: true
                                 textFormat: Text.PlainText
+                            }
+                        }
+                        DelegateChoice {
+                            roleValue: UserSettingsModel.EditableText
+                            TextField {
+                                enabled: model.enabled
+                                text: model.value
+                                onEditingFinished: model.value = text
+                                selectByMouse: true
+                                color: model.enabled ? palette.text : palette.buttonText
+                                topPadding: Nheko.paddingSmall
+                                bottomPadding: Nheko.paddingSmall
+                                background: Rectangle {
+                                    color: parent.activeFocus ? palette.highlight : palette.alternateBase
+                                    border.color: parent.activeFocus ? palette.highlight : palette.mid
+                                    radius: Nheko.paddingSmall / 2
+                                }
                             }
                         }
                         DelegateChoice {

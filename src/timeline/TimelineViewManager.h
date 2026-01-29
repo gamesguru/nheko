@@ -9,6 +9,8 @@
 
 #include <unordered_map>
 
+#include <mtx/secret_storage.hpp>
+
 class QQuickItem;
 class QQuickTextDocument;
 
@@ -104,8 +106,8 @@ signals:
     void replyingEventChanged(QString replyingEvent);
     void replyClosed();
     void inviteUsers(QString roomId, QStringList users);
-    void showRoomList();
-    void narrowViewChanged();
+    void showSecretStorageInput(mtx::secret_storage::AesHmacSha2KeyDescription keyDesc,
+                                const std::map<std::string, mtx::secret_storage::AesHmacSha2EncryptedData> &secrets);
     void focusInput();
     void openRoomMembersDialog(MemberList *members, TimelineModel *room);
     void openRoomSettingsDialog(RoomSettings *settings);

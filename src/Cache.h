@@ -20,6 +20,7 @@
 
 #include "CacheCryptoStructs.h"
 #include "CacheStructs.h"
+#include "storage/StorageBackend.h"
 
 namespace mtx::responses {
 struct Notifications;
@@ -31,6 +32,9 @@ setNeedsCompactFlag();
 
 void
 init(const QString &user_id);
+
+void
+teardown();
 
 std::string
 displayName(const std::string &room_id, const std::string &user_id);

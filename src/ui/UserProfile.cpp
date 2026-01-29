@@ -218,22 +218,29 @@ UserProfile::signOutDevice(const QString &deviceID)
       UIA::instance()->genericHandler(tr("Sign out device %1").arg(deviceID)),
       [this, deviceID](mtx::http::RequestErr e) {
           if (e) {
-              nhlog::ui()->critical("Failure when attempting to sign out device {}",
-                                    deviceID.toStdString());
+              nhlog::ui()->critical("Failure when attempting to sign out device {}: {} (http: {}, matrix: {})",
+                                    deviceID.toStdString(),
+                                    e->matrix_error.error,
+                                    static_cast<int>(e->status_code),
+                                    mtx::errors::to_string(e->matrix_error.errcode));
               return;
           }
           nhlog::ui()->info("Device {} successfully signed out!", deviceID.toStdString());
           // This is us. Let's update the interface accordingly
           if (isSelf() && deviceID.toStdString() == ::http::client()->device_id()) {
-              ChatPage::instance()->dropToLoginPageCb(tr("You signed out this device."));
+              ChatPage::instance()->initiateLogout();
+          } else {
+              refreshDevices();
           }
-          refreshDevices();
       });
 }
 
 void
 UserProfile::refreshDevices()
 {
+    if (!cache::isInitialized())
+        return;
+
     cache::client()->markUserKeysOutOfDate({this->userid_.toStdString()});
     fetchDeviceList(this->userid_);
 }
@@ -347,20 +354,38 @@ UserProfile::updateVerificationStatus()
     emit userStatusChanged();
 
     deviceInfo.reserve(devices.size());
+    nhlog::db()->debug("Building device list for user {} with {} devices. Cache says user_verified={}", userid_.toStdString(), devices.size(), static_cast<int>(verificationStatus.user_verified));
+    for (const auto& vd : verificationStatus.verified_devices) {
+        nhlog::db()->debug("  UserProfile sees verified device: {}", vd);
+    }
     for (const auto &d : devices) {
         auto device = d.second;
-        verification::Status verified =
-          std::find(verificationStatus.verified_devices.begin(),
-                    verificationStatus.verified_devices.end(),
-                    device.device_id) == verificationStatus.verified_devices.end()
-            ? verification::UNVERIFIED
-            : verification::VERIFIED;
-
-        if (isSelf() && device.device_id == ::http::client()->device_id())
+        verification::Status verified;
+        if (isSelf() && device.device_id == ::http::client()->device_id()) {
             verified = verification::Status::SELF;
+        } else {
+            verified =
+              std::find(verificationStatus.verified_devices.begin(),
+                        verificationStatus.verified_devices.end(),
+                        device.device_id) == verificationStatus.verified_devices.end()
+                ? verification::UNVERIFIED
+                : verification::VERIFIED;
+        }
+
+        nhlog::db()->debug("  Device: {} | Name: '{}' | Status: {} | User verified: {}",
+                          device.device_id,
+                          device.unsigned_info.device_display_name,
+                          static_cast<int>(verified),
+                          static_cast<int>(verificationStatus.user_verified));
+
+        // Fall back to device_id if display_name is empty
+        std::string displayName = device.unsigned_info.device_display_name;
+        if (displayName.empty()) {
+            displayName = device.device_id;
+        }
 
         deviceInfo.emplace_back(QString::fromStdString(d.first),
-                                QString::fromStdString(device.unsigned_info.device_display_name),
+                                QString::fromStdString(displayName),
                                 verified);
     }
 

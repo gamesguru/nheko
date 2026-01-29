@@ -241,7 +241,8 @@ SelfVerificationStatus::verifyMasterKey()
         if (d.startsWith(QLatin1String("ed25519:"))) {
             d.remove(QStringLiteral("ed25519:"));
 
-            if (keys->device_keys.count(d.toStdString()))
+            if (d.toStdString() != http::client()->device_id() &&
+                keys->device_keys.count(d.toStdString()))
                 devices.push_back(std::move(d));
         }
     }
@@ -249,8 +250,10 @@ SelfVerificationStatus::verifyMasterKey()
     if (!devices.empty())
         ChatPage::instance()->timelineManager()->verificationManager()->verifyOneOfDevices(
           QString::fromStdString(this_user), std::move(devices));
-    else
-        nhlog::db()->info("No devices to verify");
+    else {
+        nhlog::db()->info("No devices to verify, trying passphrase");
+        verifyMasterKeyWithPassphrase();
+    }
 }
 
 void
@@ -316,10 +319,8 @@ SelfVerificationStatus::invalidate()
     }
 
     if (keys->master_keys.keys.empty()) {
-        if (status_ != SelfVerificationStatus::NoMasterKey) {
-            this->status_ = SelfVerificationStatus::NoMasterKey;
-            emit statusChanged();
-        }
+        this->status_ = SelfVerificationStatus::NoMasterKey;
+        emit statusChanged();
         return;
     }
 
@@ -334,7 +335,22 @@ SelfVerificationStatus::invalidate()
     auto verifStatus = cache::client()->verificationStatus(http::client()->user_id().to_string());
 
     if (!verifStatus.user_verified) {
-        if (status_ != SelfVerificationStatus::UnverifiedMasterKey) {
+        if (this->status_ != SelfVerificationStatus::UnverifiedMasterKey) {
+            this->status_ = SelfVerificationStatus::UnverifiedMasterKey;
+            emit statusChanged();
+        }
+        return;
+    }
+
+    nhlog::db()->debug("SelfVerificationStatus: device_id={}, is_verified={}, user_verified={}, unverified_count={}", 
+        http::client()->device_id(),
+        verifStatus.verified_devices.count(http::client()->device_id()),
+        static_cast<int>(verifStatus.user_verified),
+        verifStatus.unverified_device_count);
+    
+    // Check if the current device is verified. If not, treat it as an unverified login.
+    if (!verifStatus.verified_devices.count(http::client()->device_id())) {
+        if (this->status_ != SelfVerificationStatus::UnverifiedMasterKey) {
             this->status_ = SelfVerificationStatus::UnverifiedMasterKey;
             emit statusChanged();
         }

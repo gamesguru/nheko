@@ -168,6 +168,10 @@ TimelineViewManager::TimelineViewManager(CallManager *, ChatPage *parent)
         isInitialSync_ = true;
         emit initialSyncChanged(true);
     });
+    connect(parent,
+            &ChatPage::showSecretStorageInput,
+            this,
+            &TimelineViewManager::showSecretStorageInput);
     connect(parent, &ChatPage::connectionLost, this, [this] {
         isConnected_ = false;
         emit isConnectedChanged(false);

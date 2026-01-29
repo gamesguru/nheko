@@ -23,7 +23,7 @@ ApplicationWindow {
     height: content.implicitHeight + Nheko.paddingLarge + footer.implicitHeight
 
     Shortcut {
-        sequence: StandardKey.Cancel
+        sequences: [StandardKey.Cancel]
         onActivated: dbb.rejected()
     }
 
@@ -139,7 +139,7 @@ ApplicationWindow {
 
         Button {
             text: summary.isKnockOnly ? qsTr("Knock") : qsTr("Join")
-            enabled: input.text.match("#.+?:.{3,}")
+            enabled: summary.roomid !== ""
             DialogButtonBox.buttonRole: DialogButtonBox.AcceptRole
         }
 
