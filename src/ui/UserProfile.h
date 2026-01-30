@@ -183,7 +183,6 @@ public:
     TimelineModel *room() const { return model; }
 
     Q_INVOKABLE void verify(QString device = QLatin1String(""));
-    Q_INVOKABLE void markLocallyTrusted(QString device);
     Q_INVOKABLE void unverify(const QString &device = QLatin1String(""));
     Q_INVOKABLE void fetchDeviceList(const QString &userID);
     Q_INVOKABLE void refreshDevices();

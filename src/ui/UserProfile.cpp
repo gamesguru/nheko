@@ -485,12 +485,6 @@ UserProfile::unverify(const QString &device)
 }
 
 void
-UserProfile::markLocallyTrusted(QString device)
-{
-    cache::markDeviceVerified(userid_.toStdString(), device.toStdString());
-}
-
-void
 UserProfile::setGlobalUsername(const QString &globalUser)
 {
     globalUsername = globalUser;
