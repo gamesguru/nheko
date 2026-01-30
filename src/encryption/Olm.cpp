@@ -318,6 +318,7 @@ handle_olm_message(const OlmMessage &msg, const UserKeyCache &otherUserDeviceKey
 
             {
                 std::string msg_type       = payload["type"].get<std::string>();
+                nhlog::crypto()->debug("Decrypted event type: {}", msg_type);
                 nlohmann::json event_array = nlohmann::json::array();
                 event_array.push_back(payload);
 
@@ -353,6 +354,7 @@ handle_olm_message(const OlmMessage &msg, const UserKeyCache &otherUserDeviceKey
                          std::get_if<DeviceEvent<msg::KeyVerificationDone>>(&device_event)) {
                 ChatPage::instance()->receivedDeviceVerificationDone(e8->content);
             } else if (auto roomKey = std::get_if<DeviceEvent<msg::RoomKey>>(&device_event)) {
+                nhlog::crypto()->debug("Handling RoomKey event from {}", msg.sender);
                 create_inbound_megolm_session(*roomKey, msg.sender_key, sender_ed25519);
             } else if (auto forwardedRoomKey =
                          std::get_if<DeviceEvent<msg::ForwardedRoomKey>>(&device_event)) {

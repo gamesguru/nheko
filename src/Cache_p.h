@@ -304,6 +304,8 @@ signals:
     void userKeysUpdate(const std::string &sync_token, const mtx::responses::QueryKeys &keyQuery);
     void userKeysUpdateFinalize(const std::string &user_id);
     void userMasterKeyAdded(const std::string &user_id, const mtx::crypto::CrossSigningKeys &keys);
+    void markDeviceVerifiedAsync(const std::string &user_id, const std::string &device);
+    void markDeviceUnverifiedAsync(const std::string &user_id, const std::string &device);
     void verificationStatusChanged(const std::string &userid);
     void selfVerificationStatusChanged();
     void secretChanged(const std::string name);

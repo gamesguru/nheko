@@ -423,6 +423,16 @@ Cache::Cache(const QString &userId, QObject *parent)
 {
     connect(this, &Cache::userKeysUpdate, this, &Cache::updateUserKeys, Qt::QueuedConnection);
     connect(this, &Cache::userMasterKeyAdded, this, &Cache::addUserMasterKey, Qt::QueuedConnection);
+    connect(this,
+            &Cache::markDeviceVerifiedAsync,
+            this,
+            &Cache::markDeviceVerified,
+            Qt::QueuedConnection);
+    connect(this,
+            &Cache::markDeviceUnverifiedAsync,
+            this,
+            &Cache::markDeviceUnverified,
+            Qt::QueuedConnection);
     connect(
       this,
       &Cache::verificationStatusChanged,
@@ -5547,6 +5557,7 @@ Cache::verificationCache(const std::string &user_id, lmdb::txn &txn)
 void
 Cache::markDeviceVerified(const std::string &user_id, const std::string &key)
 {
+    nhlog::db()->debug("Marking device verified: user={}, key={}", user_id, key);
     {
         std::string_view val;
 
@@ -6050,13 +6061,14 @@ verificationStatus(const std::string &user_id)
 void
 markDeviceVerified(const std::string &user_id, const std::string &device)
 {
-    instance_->markDeviceVerified(user_id, device);
+    emit instance_->markDeviceVerifiedAsync(user_id, device);
 }
 
 void
 markDeviceUnverified(const std::string &user_id, const std::string &device)
 {
-    instance_->markDeviceUnverified(user_id, device);
+    nhlog::db()->debug("Marking device unverified: user={}, device={}", user_id, device);
+    emit instance_->markDeviceUnverifiedAsync(user_id, device);
 }
 
 std::vector<std::string>
