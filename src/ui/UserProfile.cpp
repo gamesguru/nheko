@@ -485,7 +485,7 @@ UserProfile::unverify(const QString &device)
 }
 
 void
-UserProfile::manuallyVerify(QString device)
+UserProfile::markLocallyTrusted(QString device)
 {
     cache::markDeviceVerified(userid_.toStdString(), device.toStdString());
 }

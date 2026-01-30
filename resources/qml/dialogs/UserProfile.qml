@@ -482,8 +482,10 @@ ApplicationWindow {
                     id: forceVerifyButton
 
                     visible: verificationStatus != VerificationStatus.VERIFIED && !profile.isSelf
-                    text: qsTr("Force Verify")
-                    onClicked: profile.manuallyVerify(deviceId)
+                    text: qsTr("Mark Locally Trusted")
+                    ToolTip.visible: hovered
+                    ToolTip.text: qsTr("Locally trust this device without cross-signing verification. This will not affect your other devices.")
+                    onClicked: profile.markLocallyTrusted(deviceId)
                 }
 
             }
