@@ -5237,16 +5237,7 @@ Cache::updateUserKeys(const std::string &sync_token, const mtx::responses::Query
                 updateToWrite.master_key_changed = true;
                 updateToWrite.master_keys        = update.master_keys;
             } else if (!update.master_keys.keys.empty()) {
-                // If the keys are the same, we merge the signatures, so that we don't lose our own
-                // signature if the server doesn't echo it back!
-                auto oldSigs              = updateToWrite.master_keys.signatures;
                 updateToWrite.master_keys = update.master_keys;
-
-                auto localUser = localUserId_.toStdString();
-                if (oldSigs.count(localUser) &&
-                    !updateToWrite.master_keys.signatures.count(localUser)) {
-                    updateToWrite.master_keys.signatures[localUser] = oldSigs[localUser];
-                }
             }
 
             updateToWrite.self_signing_keys = update.self_signing_keys;
