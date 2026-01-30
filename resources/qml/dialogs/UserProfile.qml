@@ -478,6 +478,14 @@ ApplicationWindow {
                     }
                 }
 
+                Button {
+                    id: forceVerifyButton
+
+                    visible: verificationStatus != VerificationStatus.VERIFIED && !profile.isSelf
+                    text: qsTr("Force Verify")
+                    onClicked: profile.manuallyVerify(deviceId)
+                }
+
             }
         }
 

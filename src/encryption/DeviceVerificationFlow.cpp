@@ -908,6 +908,14 @@ DeviceVerificationFlow::unverify()
     emit refreshProfile();
 }
 
+void
+DeviceVerificationFlow::verify()
+{
+    cache::markDeviceVerified(this->toClient.to_string(), this->deviceId.toStdString());
+
+    emit refreshProfile();
+}
+
 QSharedPointer<DeviceVerificationFlow>
 DeviceVerificationFlow::NewInRoomVerification(QObject *parent_,
                                               TimelineModel *timelineModel_,
