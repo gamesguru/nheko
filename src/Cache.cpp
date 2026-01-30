@@ -422,6 +422,7 @@ Cache::Cache(const QString &userId, QObject *parent)
   , db(std::make_unique<CacheDb>())
 {
     connect(this, &Cache::userKeysUpdate, this, &Cache::updateUserKeys, Qt::QueuedConnection);
+    connect(this, &Cache::userMasterKeyAdded, this, &Cache::addUserMasterKey, Qt::QueuedConnection);
     connect(
       this,
       &Cache::verificationStatusChanged,
@@ -5149,6 +5150,35 @@ Cache::userKeys_(const std::string &user_id, lmdb::txn &txn)
 }
 
 void
+Cache::addUserMasterKey(const std::string &user_id, const mtx::crypto::CrossSigningKeys &keys)
+{
+    auto txn = lmdb::txn::begin(db->env_);
+    auto db_ = getUserKeysDb(txn);
+
+    std::string_view oldKeys;
+    UserKeyCache updateToWrite;
+    if (db_.get(txn, user_id, oldKeys)) {
+        updateToWrite = nlohmann::json::parse(oldKeys).get<UserKeyCache>();
+
+        if (updateToWrite.master_keys.keys == keys.keys) {
+            // merge signatures
+            for (const auto &[user, sigs] : keys.signatures) {
+                for (const auto &[key, sig] : sigs) {
+                    updateToWrite.master_keys.signatures[user][key] = sig;
+                }
+            }
+        } else {
+            updateToWrite.master_keys = keys;
+        }
+    } else {
+        updateToWrite.master_keys = keys;
+    }
+
+    db_.put(txn, user_id, nlohmann::json(updateToWrite).dump());
+    txn.commit();
+}
+
+void
 Cache::updateUserKeys(const std::string &sync_token, const mtx::responses::QueryKeys &keyQuery)
 {
     auto txn = lmdb::txn::begin(db->env_);
@@ -5188,15 +5218,27 @@ Cache::updateUserKeys(const std::string &sync_token, const mtx::responses::Query
             }
 
             if (!updateToWrite.master_keys.keys.empty() &&
+                !update.master_keys.keys.empty() &&
                 update.master_keys.keys != updateToWrite.master_keys.keys) {
                 nhlog::db()->debug("Master key of {} changed:\nold: {}\nnew: {}",
                                    user,
                                    updateToWrite.master_keys.keys.size(),
                                    update.master_keys.keys.size());
                 updateToWrite.master_key_changed = true;
+                updateToWrite.master_keys        = update.master_keys;
+            } else if (!update.master_keys.keys.empty()) {
+                // If the keys are the same, we merge the signatures, so that we don't lose our own
+                // signature if the server doesn't echo it back!
+                auto oldSigs              = updateToWrite.master_keys.signatures;
+                updateToWrite.master_keys = update.master_keys;
+
+                auto localUser = localUserId_.toStdString();
+                if (oldSigs.count(localUser) &&
+                    !updateToWrite.master_keys.signatures.count(localUser)) {
+                    updateToWrite.master_keys.signatures[localUser] = oldSigs[localUser];
+                }
             }
 
-            updateToWrite.master_keys       = update.master_keys;
             updateToWrite.self_signing_keys = update.self_signing_keys;
             updateToWrite.user_signing_keys = update.user_signing_keys;
 
@@ -5692,10 +5734,21 @@ Cache::verificationStatus_(const std::string &user_id, lmdb::txn &txn)
         auto master_keys = ourKeys->master_keys.keys;
 
         if (user_id != local_user) {
-            bool theirMasterKeyVerified =
-              verifyAtLeastOneSig(ourKeys->user_signing_keys, master_keys, local_user) &&
-              verifyAtLeastOneSig(
+            bool haveOurUserSigningKey = verifyAtLeastOneSig(ourKeys->user_signing_keys, master_keys, local_user);
+            bool theirMasterKeySignedByUs = verifyAtLeastOneSig(
                 theirKeys->master_keys, ourKeys->user_signing_keys.keys, local_user);
+
+            nhlog::crypto()->debug("Checking trust for {}: haveOurUserSigningKey={}, theirMasterKeySignedByUs={}", 
+                user_id, haveOurUserSigningKey, theirMasterKeySignedByUs);
+
+            if (!theirMasterKeySignedByUs) {
+                 nhlog::crypto()->debug("  our user signing keys: {}", nlohmann::json(ourKeys->user_signing_keys).dump());
+                 nhlog::crypto()->debug("  their master keys: {}", nlohmann::json(theirKeys->master_keys).dump());
+            }
+
+            bool theirMasterKeyVerified =
+              haveOurUserSigningKey &&
+              theirMasterKeySignedByUs;
 
             if (theirMasterKeyVerified)
                 trustlevel = crypto::Trust::Verified;
@@ -5980,6 +6033,11 @@ void
 updateUserKeys(const std::string &sync_token, const mtx::responses::QueryKeys &keyQuery)
 {
     instance_->updateUserKeys(sync_token, keyQuery);
+}
+void
+addUserMasterKey(const std::string &user_id, const mtx::crypto::CrossSigningKeys &keys)
+{
+    emit instance_->userMasterKeyAdded(user_id, keys);
 }
 
 // device & user verification cache

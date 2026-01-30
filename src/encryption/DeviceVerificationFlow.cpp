@@ -338,14 +338,30 @@ DeviceVerificationFlow::DeviceVerificationFlow(QObject *,
               }
 
               if (!req.signatures.empty()) {
+                  for (const auto &[user_id, keyMap] : req.signatures) {
+                      for (const auto &[key_id, key] : keyMap) {
+                          if (std::holds_alternative<mtx::crypto::CrossSigningKeys>(key)) {
+                              cache::client()->addUserMasterKey(
+                                user_id, std::get<mtx::crypto::CrossSigningKeys>(key));
+                          }
+                      }
+                  }
+
                   nhlog::crypto()->debug("Signatures to send: {}", nlohmann::json(req).dump(2));
                   http::client()->keys_signatures_upload(
                     req,
-                    [](const mtx::responses::KeySignaturesUpload &res, mtx::http::RequestErr err) {
+                    [this](const mtx::responses::KeySignaturesUpload &res,
+                           mtx::http::RequestErr err) {
                         if (err) {
                             nhlog::net()->error("failed to upload signatures: {},{}",
                                                 mtx::errors::to_string(err->matrix_error.errcode),
                                                 static_cast<int>(err->status_code));
+                        } else {
+                            // If we successfully uploaded the signatures, we should also update our
+                            // view of the keys.
+                            cache::client()->query_keys(
+                              this->toClient.to_string(),
+                              [](const UserKeyCache &, mtx::http::RequestErr) {});
                         }
 
                         // MSVC bug, error C3493: 'key_id' cannot be implicitly captured because no

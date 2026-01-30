@@ -49,6 +49,7 @@ public:
     std::map<std::string, std::optional<UserKeyCache>>
     getMembersWithKeys(const std::string &room_id, bool verified_only);
     void updateUserKeys(const std::string &sync_token, const mtx::responses::QueryKeys &keyQuery);
+    void addUserMasterKey(const std::string &user_id, const mtx::crypto::CrossSigningKeys &keys);
     void markUserKeysOutOfDate(const std::vector<std::string> &user_ids);
     void markUserKeysOutOfDate(lmdb::txn &txn,
                                lmdb::dbi &db,
@@ -302,6 +303,7 @@ signals:
     void roomReadStatus(const std::map<QString, bool> &status);
     void userKeysUpdate(const std::string &sync_token, const mtx::responses::QueryKeys &keyQuery);
     void userKeysUpdateFinalize(const std::string &user_id);
+    void userMasterKeyAdded(const std::string &user_id, const mtx::crypto::CrossSigningKeys &keys);
     void verificationStatusChanged(const std::string &userid);
     void selfVerificationStatusChanged();
     void secretChanged(const std::string name);
