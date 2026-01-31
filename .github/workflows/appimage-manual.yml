@@ -1,0 +1,88 @@
+---
+name: AppImage Build (Manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      mtxclient_ref:
+        description: "Optional: mtxclient Git Reference (e.g. https://github.com/user/mtxclient@branch)"
+        required: false
+        type: string
+
+jobs:
+  build-appimage:
+    runs-on: ubuntu-24.04
+
+    env:
+      DEBIAN_FRONTEND: noninteractive
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake git wget curl python3-pip python3-setuptools \
+            desktop-file-utils elfutils file gnupg2 gtk-update-icon-cache \
+            libglib2.0-bin libyaml-dev squashfs-tools \
+            liblmdb-dev libssl-dev libcurl4-openssl-dev libevent-dev libspdlog-dev \
+            nlohmann-json3-dev libcmark-dev asciidoc libre2-dev libgtest-dev \
+            libgl1-mesa-dev libglu1-mesa-dev libxkbcommon-dev libvulkan-dev
+
+      - name: Clone Custom mtxclient
+        if: inputs.mtxclient_ref != ''
+        run: |
+          REF="${{ inputs.mtxclient_ref }}"
+          URL="${REF%%@*}"
+          BRANCH="${REF##*@}"
+          [ "$URL" = "$BRANCH" ] && BRANCH="master"
+
+          git clone -b "$BRANCH" "$URL" custom_mtxclient
+          echo "MTXCLIENT_SOURCE_DIR=$(pwd)/custom_mtxclient" >> $GITHUB_ENV
+
+      - name: Install appimage-builder
+        run: |
+          sudo pip3 install appimage-builder --break-system-packages
+
+      - name: Install appimagetool
+        run: |
+          sudo wget https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage -O /usr/local/bin/appimagetool
+          sudo chmod +x /usr/local/bin/appimagetool
+
+      - name: Build Nheko
+        run: |
+          export PATH="/usr/lib/ccache:${PATH}"
+
+          CMAKE_ARGS=""
+          if [ -n "$MTXCLIENT_SOURCE_DIR" ]; then
+             echo "Overriding MatrixClient source dir: $MTXCLIENT_SOURCE_DIR"
+             CMAKE_ARGS="-DFETCHCONTENT_SOURCE_DIR_MATRIXCLIENT=$MTXCLIENT_SOURCE_DIR"
+          fi
+
+          cmake -GNinja -H. -Bbuild \
+              -DCMAKE_INSTALL_PREFIX=/usr \
+              -DUSE_BUNDLED_OPENSSL=OFF \
+              -DUSE_BUNDLED_MTXCLIENT=ON -DUSE_BUNDLED_COEURL=ON \
+              -DUSE_BUNDLED_LMDB=OFF -DUSE_BUNDLED_QTKEYCHAIN=ON \
+              -DUSE_BUNDLED_KDSINGLEAPPLICATION=ON \
+              -DVOIP=OFF -DMAN=OFF \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DCI_BUILD=ON -DFETCHCONTENT_QUIET=OFF \
+              $CMAKE_ARGS
+
+          DESTDIR=`pwd`/AppDir ninja -C build install/local
+
+          mkdir -p AppDir/usr/lib/x86_64-linux-gnu AppDir/lib/x86_64-linux-gnu
+
+      - name: Build AppImage
+        run: |
+          appimage-builder --skip-test
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nheko-appimage
+          path: "*.AppImage"
