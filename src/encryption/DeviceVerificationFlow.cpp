@@ -46,22 +46,47 @@ DeviceVerificationFlow::DeviceVerificationFlow(QObject *,
 
     auto user_id_  = userID.toStdString();
     this->toClient = mtx::identifiers::parse<mtx::identifiers::User>(user_id_);
-    cache::client()->query_keys(
-      user_id_, [user_id_, this](const UserKeyCache &res, mtx::http::RequestErr err) {
-          if (err) {
-              nhlog::net()->warn("failed to query device keys: {},{}",
-                                 mtx::errors::to_string(err->matrix_error.errcode),
-                                 static_cast<int>(err->status_code));
-              return;
-          }
+    mtx::requests::QueryKeys req;
+    req.device_keys[user_id_] = {};
+    auto *context = new QObject(this);
+    http::client()->query_keys(
+      req,
+      [user_id_, context](const mtx::responses::QueryKeys &res, mtx::http::RequestErr err) {
+          QTimer::singleShot(0, context, [context, res, err, user_id_] {
+              auto self = qobject_cast<DeviceVerificationFlow *>(context->parent());
+              if (!self) {
+                  context->deleteLater();
+                  return;
+              }
 
-          if (!this->deviceId.isEmpty() &&
-              (res.device_keys.find(deviceId.toStdString()) == res.device_keys.end())) {
-              nhlog::net()->warn("no devices retrieved {}", user_id_);
-              return;
-          }
+              if (err) {
+                  nhlog::net()->warn("failed to query device keys: {},{}",
+                                     mtx::errors::to_string(err->matrix_error.errcode),
+                                     static_cast<int>(err->status_code));
+                  context->deleteLater();
+                  return;
+              }
 
-          this->their_keys = res;
+              self->their_keys = {};
+              if (res.device_keys.count(user_id_))
+                  self->their_keys.device_keys = res.device_keys.at(user_id_);
+              if (res.master_keys.count(user_id_))
+                  self->their_keys.master_keys = res.master_keys.at(user_id_);
+              if (res.self_signing_keys.count(user_id_))
+                  self->their_keys.self_signing_keys = res.self_signing_keys.at(user_id_);
+              if (res.user_signing_keys.count(user_id_))
+                  self->their_keys.user_signing_keys = res.user_signing_keys.at(user_id_);
+
+              if (!self->deviceId.isEmpty() &&
+                  (self->their_keys.device_keys.find(self->deviceId.toStdString()) ==
+                   self->their_keys.device_keys.end())) {
+                  nhlog::net()->warn("no devices retrieved {}", user_id_);
+                  context->deleteLater();
+                  return;
+              }
+
+              context->deleteLater();
+          });
       });
 
     cache::client()->query_keys(
