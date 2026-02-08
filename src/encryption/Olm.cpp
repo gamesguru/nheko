@@ -203,6 +203,19 @@ handle_to_device_messages(const std::vector<mtx::events::collections::DeviceEven
         } else if (auto e =
                      std::get_if<mtx::events::DeviceEvent<mtx::events::msg::SecretRequest>>(&msg)) {
             handle_secret_request(e, e->sender);
+        } else if (msg_type == "m.room_key.withheld" ||
+                   msg_type == "org.matrix.room_key.withheld") {
+            try {
+                auto content = j_msg.at("content");
+                auto reason  = content.value("reason", "");
+                auto code    = content.value("code", "unknown");
+                auto sender  = j_msg.value("sender", "unknown");
+                nhlog::crypto()->info("Key withheld by {}: {} ({})", sender, reason, code);
+            } catch (const nlohmann::json::exception &e) {
+                nhlog::crypto()->warn("Key withheld event (malformed): {} {}",
+                                      e.what(),
+                                      j_msg.dump(2));
+            }
         } else {
             nhlog::crypto()->warn("unhandled event: {}", j_msg.dump(2));
         }
@@ -305,6 +318,7 @@ handle_olm_message(const OlmMessage &msg, const UserKeyCache &otherUserDeviceKey
 
             {
                 std::string msg_type       = payload["type"].get<std::string>();
+                nhlog::crypto()->debug("Decrypted event type: {}", msg_type);
                 nlohmann::json event_array = nlohmann::json::array();
                 event_array.push_back(payload);
 
@@ -340,6 +354,7 @@ handle_olm_message(const OlmMessage &msg, const UserKeyCache &otherUserDeviceKey
                          std::get_if<DeviceEvent<msg::KeyVerificationDone>>(&device_event)) {
                 ChatPage::instance()->receivedDeviceVerificationDone(e8->content);
             } else if (auto roomKey = std::get_if<DeviceEvent<msg::RoomKey>>(&device_event)) {
+                nhlog::crypto()->debug("Handling RoomKey event from {}", msg.sender);
                 create_inbound_megolm_session(*roomKey, msg.sender_key, sender_ed25519);
             } else if (auto forwardedRoomKey =
                          std::get_if<DeviceEvent<msg::ForwardedRoomKey>>(&device_event)) {
@@ -804,6 +819,18 @@ import_inbound_megolm_session(
         // Keys from online key backup won't have a signature, so they will be untrusted. But the
         // original sender might send us a signed session.
         data.trusted = olm_inbound_group_session_is_verified(megolm_session.get());
+
+        if (!data.trusted && !roomKey.content.forwarding_curve25519_key_chain.empty()) {
+            auto forwarder_key = roomKey.content.forwarding_curve25519_key_chain.back();
+            auto status        = cache::client()->verificationStatus(roomKey.sender);
+            if (status.verified_device_keys.count(forwarder_key) &&
+                status.verified_device_keys.at(forwarder_key) == crypto::Trust::Verified) {
+                data.trusted = true;
+                nhlog::crypto()->debug("import_inbound_megolm_session: Trusting forwarded "
+                                       "session key from verified device: {}",
+                                       forwarder_key);
+            }
+        }
 
         backup_session_key(index, data, megolm_session);
         cache::saveInboundMegolmSession(index, std::move(megolm_session), data);
@@ -1301,22 +1328,47 @@ calculate_trust(const std::string &user_id,
     try {
         auto session = cache::client()->getInboundMegolmSession(index);
         if (!session) {
+            nhlog::crypto()->debug("calculate_trust: session not found for room={}, session={}",
+                                  room_id, event.session_id);
             return trustlevel;
         }
 
         olm::client()->decrypt_group_message(session.get(), event.ciphertext);
     } catch (const lmdb::error &e) {
+        nhlog::crypto()->debug("calculate_trust: db error: {}", e.what());
         return trustlevel;
     } catch (const mtx::crypto::olm_exception &e) {
+        nhlog::crypto()->debug("calculate_trust: decrypt error: {}", e.what());
         return trustlevel;
     }
 
     auto status = cache::client()->verificationStatus(user_id);
 
-    if (megolmData && megolmData->trusted &&
-        status.verified_device_keys.count(megolmData->sender_key)) {
-        trustlevel = status.verified_device_keys.at(megolmData->sender_key);
+    if (!megolmData) {
+        nhlog::crypto()->debug("calculate_trust: no megolm data for room={}, session={}, user={}",
+                              room_id, event.session_id, user_id);
+        return trustlevel;
     }
+
+    if (!megolmData->trusted) {
+        nhlog::crypto()->debug("calculate_trust: session NOT trusted for room={}, session={}, user={}, sender_key={}, trusted_flag={}",
+                              room_id, event.session_id, user_id, megolmData->sender_key, megolmData->trusted);
+        return trustlevel;
+    }
+
+    if (!status.verified_device_keys.count(megolmData->sender_key)) {
+        nhlog::crypto()->warn("calculate_trust: sender_key {} not in verified_device_keys for user {} (verified_keys_count={}, found={})",
+                              megolmData->sender_key, user_id, status.verified_device_keys.size(), status.verified_device_keys.count(megolmData->sender_key));
+        // dump keys for debugging
+        for(const auto& [k,v] : status.verified_device_keys) {
+             nhlog::crypto()->debug("  verified key: {} -> {}", k, (int)v);
+        }
+        return trustlevel;
+    }
+
+    trustlevel = status.verified_device_keys.at(megolmData->sender_key);
+    nhlog::crypto()->debug("calculate_trust: VERIFIED trust={} for room={}, session={}, user={}",
+                          static_cast<int>(trustlevel), room_id, event.session_id, user_id);
 
     return trustlevel;
 }

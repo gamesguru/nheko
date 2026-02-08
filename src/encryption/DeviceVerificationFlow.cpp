@@ -46,22 +46,47 @@ DeviceVerificationFlow::DeviceVerificationFlow(QObject *,
 
     auto user_id_  = userID.toStdString();
     this->toClient = mtx::identifiers::parse<mtx::identifiers::User>(user_id_);
-    cache::client()->query_keys(
-      user_id_, [user_id_, this](const UserKeyCache &res, mtx::http::RequestErr err) {
-          if (err) {
-              nhlog::net()->warn("failed to query device keys: {},{}",
-                                 mtx::errors::to_string(err->matrix_error.errcode),
-                                 static_cast<int>(err->status_code));
-              return;
-          }
+    mtx::requests::QueryKeys req;
+    req.device_keys[user_id_] = {};
+    auto *context = new QObject(this);
+    http::client()->query_keys(
+      req,
+      [user_id_, context](const mtx::responses::QueryKeys &res, mtx::http::RequestErr err) {
+          QTimer::singleShot(0, context, [context, res, err, user_id_] {
+              auto self = qobject_cast<DeviceVerificationFlow *>(context->parent());
+              if (!self) {
+                  context->deleteLater();
+                  return;
+              }
 
-          if (!this->deviceId.isEmpty() &&
-              (res.device_keys.find(deviceId.toStdString()) == res.device_keys.end())) {
-              nhlog::net()->warn("no devices retrieved {}", user_id_);
-              return;
-          }
+              if (err) {
+                  nhlog::net()->warn("failed to query device keys: {},{}",
+                                     mtx::errors::to_string(err->matrix_error.errcode),
+                                     static_cast<int>(err->status_code));
+                  context->deleteLater();
+                  return;
+              }
 
-          this->their_keys = res;
+              self->their_keys = {};
+              if (res.device_keys.count(user_id_))
+                  self->their_keys.device_keys = res.device_keys.at(user_id_);
+              if (res.master_keys.count(user_id_))
+                  self->their_keys.master_keys = res.master_keys.at(user_id_);
+              if (res.self_signing_keys.count(user_id_))
+                  self->their_keys.self_signing_keys = res.self_signing_keys.at(user_id_);
+              if (res.user_signing_keys.count(user_id_))
+                  self->their_keys.user_signing_keys = res.user_signing_keys.at(user_id_);
+
+              if (!self->deviceId.isEmpty() &&
+                  (self->their_keys.device_keys.find(self->deviceId.toStdString()) ==
+                   self->their_keys.device_keys.end())) {
+                  nhlog::net()->warn("no devices retrieved {}", user_id_);
+                  context->deleteLater();
+                  return;
+              }
+
+              context->deleteLater();
+          });
       });
 
     cache::client()->query_keys(
@@ -153,6 +178,8 @@ DeviceVerificationFlow::DeviceVerificationFlow(QObject *,
                     if (msg.relations.references() != this->relation.event_id)
                         return;
                 }
+                
+                this->unverify();
                 error_ = User;
                 emit errorChanged();
                 setState(Failed);
@@ -341,11 +368,32 @@ DeviceVerificationFlow::DeviceVerificationFlow(QObject *,
                   nhlog::crypto()->debug("Signatures to send: {}", nlohmann::json(req).dump(2));
                   http::client()->keys_signatures_upload(
                     req,
-                    [](const mtx::responses::KeySignaturesUpload &res, mtx::http::RequestErr err) {
+                    [this, req](const mtx::responses::KeySignaturesUpload &res,
+                                mtx::http::RequestErr err) {
                         if (err) {
                             nhlog::net()->error("failed to upload signatures: {},{}",
                                                 mtx::errors::to_string(err->matrix_error.errcode),
                                                 static_cast<int>(err->status_code));
+                        } else {
+                            nhlog::crypto()->debug("Successfully uploaded signatures");
+
+                            for (const auto &[user_id, keyMap] : req.signatures) {
+                                for (const auto &[key_id, key] : keyMap) {
+                                    if (std::holds_alternative<mtx::crypto::CrossSigningKeys>(
+                                          key)) {
+                                        nhlog::crypto()->debug("Adding uploaded signature to cache for {}", user_id);
+                                        cache::client()->addUserMasterKey(
+                                          user_id,
+                                          std::get<mtx::crypto::CrossSigningKeys>(key));
+                                    }
+                                }
+                            }
+
+                            // If we successfully uploaded the signatures, we should also update our
+                            // view of the keys.
+                            cache::client()->query_keys(
+                              this->toClient.to_string(),
+                              [](const UserKeyCache &, mtx::http::RequestErr) {});
                         }
 
                         // MSVC bug, error C3493: 'key_id' cannot be implicitly captured because no
@@ -596,31 +644,40 @@ DeviceVerificationFlow::handleStartMessage(const mtx::events::msg::KeyVerificati
         return;
     }
 
-    nhlog::crypto()->info("verification: received start with mac methods {}",
-                          fmt::join(msg.message_authentication_codes, ", "));
+    if (msg.message_authentication_codes)
+        nhlog::crypto()->info("verification: received start with mac methods {}",
+                              fmt::join(*msg.message_authentication_codes, ", "));
+    else
+        nhlog::crypto()->info("verification: received start");
 
     // TODO(Nico): Replace with contains once we use C++23
-    if (std::ranges::count(msg.key_agreement_protocols, "curve25519-hkdf-sha256") &&
-        std::ranges::count(msg.hashes, "sha256")) {
-        if (std::ranges::count(msg.message_authentication_codes, mac_method_alg_v2)) {
+    if (msg.key_agreement_protocols &&
+        std::ranges::count(*msg.key_agreement_protocols, "curve25519-hkdf-sha256") && msg.hashes &&
+        std::ranges::count(*msg.hashes, "sha256")) {
+        if (msg.message_authentication_codes &&
+            std::ranges::count(*msg.message_authentication_codes, mac_method_alg_v2)) {
             this->mac_method = mac_method_alg_v2;
-        } else if (std::ranges::count(msg.message_authentication_codes, mac_method_alg_v1)) {
+        } else if (msg.message_authentication_codes &&
+                   std::ranges::count(*msg.message_authentication_codes, mac_method_alg_v1)) {
             this->mac_method = mac_method_alg_v1;
         } else {
             this->cancelVerification(DeviceVerificationFlow::Error::UnknownMethod);
             return;
         }
 
-        if (std::ranges::count(msg.short_authentication_string,
+        if (msg.short_authentication_string &&
+            std::ranges::count(*msg.short_authentication_string,
                                mtx::events::msg::SASMethods::Emoji)) {
             this->method = mtx::events::msg::SASMethods::Emoji;
-        } else if (std::ranges::count(msg.short_authentication_string,
+        } else if (msg.short_authentication_string &&
+                   std::ranges::count(*msg.short_authentication_string,
                                       mtx::events::msg::SASMethods::Decimal)) {
             this->method = mtx::events::msg::SASMethods::Decimal;
         } else {
             this->cancelVerification(DeviceVerificationFlow::Error::UnknownMethod);
             return;
         }
+
 
         if (!sender)
             this->canonical_json = nlohmann::json(msg).dump();
@@ -644,8 +701,6 @@ DeviceVerificationFlow::handleStartMessage(const mtx::events::msg::KeyVerificati
         // accept
         if (state_ != PromptStartVerification && !sender)
             this->acceptVerificationRequest();
-    } else {
-        this->cancelVerification(DeviceVerificationFlow::Error::UnknownMethod);
     }
 }
 
@@ -874,6 +929,14 @@ void
 DeviceVerificationFlow::unverify()
 {
     cache::markDeviceUnverified(this->toClient.to_string(), this->deviceId.toStdString());
+
+    emit refreshProfile();
+}
+
+void
+DeviceVerificationFlow::verify()
+{
+    cache::markDeviceVerified(this->toClient.to_string(), this->deviceId.toStdString());
 
     emit refreshProfile();
 }

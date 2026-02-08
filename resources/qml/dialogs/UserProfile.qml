@@ -477,7 +477,6 @@ ApplicationWindow {
                         profile.verify(deviceId);
                     }
                 }
-
             }
         }
 

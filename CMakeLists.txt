@@ -298,7 +298,8 @@ if(NOT MSVC)
         -fsized-deallocation \
         -fdiagnostics-color=always \
         -Wunreachable-code \
-        -Wno-attributes"
+        -Wno-attributes \
+        -Wno-error=unused-parameter"
     )
     if(NOT CMAKE_COMPILER_IS_GNUCXX)
         # -Wshadow is buggy and broken in GCC, so do not enable it.
@@ -624,7 +625,7 @@ if(USE_BUNDLED_MTXCLIENT)
     set(BUILD_LIB_TESTS OFF CACHE INTERNAL "")
     FetchContent_MakeAvailable(MatrixClient)
 else()
-    find_package(MatrixClient 0.10.0 REQUIRED)
+    find_package(MatrixClient 0.11.0 REQUIRED)
 endif()
 
 if(VOIP)

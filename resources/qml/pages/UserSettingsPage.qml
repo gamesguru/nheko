@@ -185,6 +185,12 @@ Rectangle {
                             Text {
                                 color: model.good ? "green" : Nheko.theme.error
                                 text: model.value ? qsTr("CACHED") : qsTr("NOT CACHED")
+
+                                HoverHandler {
+                                    id: keyHover
+                                }
+                                ToolTip.visible: keyHover.hovered && model.debugInfo
+                                ToolTip.text: model.debugInfo
                             }
                         }
                         DelegateChoice {
