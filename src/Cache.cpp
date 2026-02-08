@@ -5157,8 +5157,6 @@ Cache::updateUserKeys(const std::string &sync_token, const mtx::responses::Query
         updates[user].self_signing_keys = keys;
 
     for (auto &[user, update] : updates) {
-        nhlog::db()->debug("Updated user keys: {}", user);
-
         auto updateToWrite = update;
 
         std::string_view oldKeys;
@@ -5194,72 +5192,84 @@ Cache::updateUserKeys(const std::string &sync_token, const mtx::responses::Query
             auto oldDeviceKeys = std::move(updateToWrite.device_keys);
             updateToWrite.device_keys.clear();
 
-            // Don't insert keys, which we have seen once already
-            for (const auto &[device_id, device_keys] : update.device_keys) {
-                if (oldDeviceKeys.count(device_id) &&
-                    oldDeviceKeys.at(device_id).keys == device_keys.keys) {
-                    // this is safe, since the keys are the same
-                    updateToWrite.device_keys[device_id] = device_keys;
-                } else {
-                    bool keyReused = false;
+            // Workaround for Conduwuit sending empty device lists with master key updates
+            if (update.device_keys.empty() && !oldDeviceKeys.empty() &&
+                (!update.master_keys.keys.empty() || !update.self_signing_keys.keys.empty() ||
+                 !update.user_signing_keys.keys.empty())) {
+                nhlog::db()->warn("Workaround: Preserving existing devices for {} because update "
+                                  "had no devices but other keys were present.",
+                                  user);
+                updateToWrite.device_keys = std::move(oldDeviceKeys);
+            } else {
+                // Don't insert keys, which we have seen once already
+                for (const auto &[device_id, device_keys] : update.device_keys) {
+                    if (oldDeviceKeys.count(device_id) &&
+                        oldDeviceKeys.at(device_id).keys == device_keys.keys) {
+                        // this is safe, since the keys are the same
+                        updateToWrite.device_keys[device_id] = device_keys;
+                    } else {
+                        bool keyReused = false;
+                        for (const auto &[key_id, key] : device_keys.keys) {
+                            (void)key_id;
+                            if (updateToWrite.seen_device_keys.count(key)) {
+                                nhlog::crypto()->warn(
+                                  "Key '{}' reused by ({}: {})", key, user, device_id);
+                                keyReused = true;
+                                break;
+                            }
+                            if (updateToWrite.seen_device_ids.count(device_id)) {
+                                nhlog::crypto()->warn(
+                                  "device_id '{}' reused by ({})", device_id, user);
+                                keyReused = true;
+                                break;
+                            }
+                        }
+
+                        if (!keyReused && !oldDeviceKeys.count(device_id)) {
+                            // ensure the key has a valid signature from itself
+                            std::string device_signing_key = "ed25519:" + device_keys.device_id;
+                            if (device_id != device_keys.device_id) {
+                                nhlog::crypto()->warn("device {}:{} has a different device id "
+                                                      "in the body: {}",
+                                                      user,
+                                                      device_id,
+                                                      device_keys.device_id);
+                                continue;
+                            }
+                            if (!device_keys.signatures.count(user) ||
+                                !device_keys.signatures.at(user).count(device_signing_key)) {
+                                nhlog::crypto()->warn(
+                                  "device {}:{} has no signature", user, device_id);
+                                continue;
+                            }
+                            if (!device_keys.keys.count(device_signing_key) ||
+                                !device_keys.keys.count("curve25519:" + device_id)) {
+                                nhlog::crypto()->warn(
+                                  "Device key has no curve25519 or ed25519 key  {}:{}",
+                                  user,
+                                  device_id);
+                                continue;
+                            }
+
+                            if (!mtx::crypto::ed25519_verify_signature(
+                                  device_keys.keys.at(device_signing_key),
+                                  nlohmann::json(device_keys),
+                                  device_keys.signatures.at(user).at(device_signing_key))) {
+                                nhlog::crypto()->warn(
+                                  "device {}:{} has an invalid signature", user, device_id);
+                                continue;
+                            }
+
+                            updateToWrite.device_keys[device_id] = device_keys;
+                        }
+                    }
+
                     for (const auto &[key_id, key] : device_keys.keys) {
                         (void)key_id;
-                        if (updateToWrite.seen_device_keys.count(key)) {
-                            nhlog::crypto()->warn(
-                              "Key '{}' reused by ({}: {})", key, user, device_id);
-                            keyReused = true;
-                            break;
-                        }
-                        if (updateToWrite.seen_device_ids.count(device_id)) {
-                            nhlog::crypto()->warn("device_id '{}' reused by ({})", device_id, user);
-                            keyReused = true;
-                            break;
-                        }
+                        updateToWrite.seen_device_keys.insert(key);
                     }
-
-                    if (!keyReused && !oldDeviceKeys.count(device_id)) {
-                        // ensure the key has a valid signature from itself
-                        std::string device_signing_key = "ed25519:" + device_keys.device_id;
-                        if (device_id != device_keys.device_id) {
-                            nhlog::crypto()->warn("device {}:{} has a different device id "
-                                                  "in the body: {}",
-                                                  user,
-                                                  device_id,
-                                                  device_keys.device_id);
-                            continue;
-                        }
-                        if (!device_keys.signatures.count(user) ||
-                            !device_keys.signatures.at(user).count(device_signing_key)) {
-                            nhlog::crypto()->warn("device {}:{} has no signature", user, device_id);
-                            continue;
-                        }
-                        if (!device_keys.keys.count(device_signing_key) ||
-                            !device_keys.keys.count("curve25519:" + device_id)) {
-                            nhlog::crypto()->warn(
-                              "Device key has no curve25519 or ed25519 key  {}:{}",
-                              user,
-                              device_id);
-                            continue;
-                        }
-
-                        if (!mtx::crypto::ed25519_verify_signature(
-                              device_keys.keys.at(device_signing_key),
-                              nlohmann::json(device_keys),
-                              device_keys.signatures.at(user).at(device_signing_key))) {
-                            nhlog::crypto()->warn(
-                              "device {}:{} has an invalid signature", user, device_id);
-                            continue;
-                        }
-
-                        updateToWrite.device_keys[device_id] = device_keys;
-                    }
+                    updateToWrite.seen_device_ids.insert(device_id);
                 }
-
-                for (const auto &[key_id, key] : device_keys.keys) {
-                    (void)key_id;
-                    updateToWrite.seen_device_keys.insert(key);
-                }
-                updateToWrite.seen_device_ids.insert(device_id);
             }
         }
         updateToWrite.updated_at = sync_token;
