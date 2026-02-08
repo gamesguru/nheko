@@ -5192,13 +5192,22 @@ Cache::updateUserKeys(const std::string &sync_token, const mtx::responses::Query
             auto oldDeviceKeys = std::move(updateToWrite.device_keys);
             updateToWrite.device_keys.clear();
 
+            bool isLocalUser = (user == localUserId_.toStdString());
+
             // Workaround for Conduwuit sending empty device lists with master key updates
+            // (or empty updates generally where we don't want to lose local devices)
             if (update.device_keys.empty() && !oldDeviceKeys.empty() &&
-                (!update.master_keys.keys.empty() || !update.self_signing_keys.keys.empty() ||
+                (isLocalUser ||
+                 !update.master_keys.keys.empty() || !update.self_signing_keys.keys.empty() ||
                  !update.user_signing_keys.keys.empty())) {
-                nhlog::db()->warn("Workaround: Preserving existing devices for {} because update "
-                                  "had no devices but other keys were present.",
-                                  user);
+                nhlog::db()->warn("Workaround: Preserving {} existing devices for {} (isLocal={}) because update "
+                                  "had no devices but other keys were present (master={}, self={}, user={}).",
+                                  oldDeviceKeys.size(),
+                                  user,
+                                  isLocalUser,
+                                  update.master_keys.keys.size(),
+                                  update.self_signing_keys.keys.size(),
+                                  update.user_signing_keys.keys.size());
                 updateToWrite.device_keys = std::move(oldDeviceKeys);
             } else {
                 // Don't insert keys, which we have seen once already
@@ -5418,7 +5427,12 @@ Cache::query_keys(const std::string &user_id,
 
         if (cache_)
             last_changed = cache_->last_changed;
-        req.token = last_changed;
+        
+        // Force full query for local user to workaround potential sync token desync/server bugs
+        if (user_id != localUserId_.toStdString())
+             req.token = last_changed;
+        else
+             nhlog::db()->warn("Forcing full key query for local user {}", user_id);
     }
 
     // use context object so that we can disconnect again
@@ -5449,7 +5463,17 @@ Cache::query_keys(const std::string &user_id,
               return;
           }
 
-          emit userKeysUpdate(last_changed, res);
+          // Ensure the user is in the response, so that we update the cache entry.
+          // This fixes the infinite loop where updated_at != last_changed.
+          auto res_ = res;
+          if (res_.device_keys.find(user_id) == res_.device_keys.end() &&
+              res_.master_keys.find(user_id) == res_.master_keys.end() &&
+              res_.user_signing_keys.find(user_id) == res_.user_signing_keys.end() &&
+              res_.self_signing_keys.find(user_id) == res_.self_signing_keys.end()) {
+              res_.device_keys[user_id] = {};
+          }
+
+          emit userKeysUpdate(last_changed, res_);
           emit userKeysUpdateFinalize(user_id);
       });
 }
