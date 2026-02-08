@@ -5192,26 +5192,7 @@ Cache::updateUserKeys(const std::string &sync_token, const mtx::responses::Query
             auto oldDeviceKeys = std::move(updateToWrite.device_keys);
             updateToWrite.device_keys.clear();
 
-            bool isLocalUser = (user == localUserId_.toStdString());
-
-            // Workaround for Conduwuit sending empty device lists with master key updates
-            // (or empty updates generally where we don't want to lose local devices)
-            if (update.device_keys.empty() && !oldDeviceKeys.empty() &&
-                (isLocalUser ||
-                 !update.master_keys.keys.empty() || !update.self_signing_keys.keys.empty() ||
-                 !update.user_signing_keys.keys.empty())) {
-                nhlog::db()->warn("Workaround: Preserving {} existing devices for {} (isLocal={}) because update "
-                                  "had no devices but other keys were present (master={}, self={}, user={}).",
-                                  oldDeviceKeys.size(),
-                                  user,
-                                  isLocalUser,
-                                  update.master_keys.keys.size(),
-                                  update.self_signing_keys.keys.size(),
-                                  update.user_signing_keys.keys.size());
-                updateToWrite.device_keys = std::move(oldDeviceKeys);
-            } else {
-                // Don't insert keys, which we have seen once already
-                for (const auto &[device_id, device_keys] : update.device_keys) {
+            for (const auto &[device_id, device_keys] : update.device_keys) {
                     if (oldDeviceKeys.count(device_id) &&
                         oldDeviceKeys.at(device_id).keys == device_keys.keys) {
                         // this is safe, since the keys are the same
@@ -5279,8 +5260,9 @@ Cache::updateUserKeys(const std::string &sync_token, const mtx::responses::Query
                     }
                     updateToWrite.seen_device_ids.insert(device_id);
                 }
-            }
         }
+        // Always update the timestamp to the current sync token, so that we don't query again.
+        updateToWrite.last_changed = sync_token;
         updateToWrite.updated_at = sync_token;
         db_.put(txn, user, nlohmann::json(updateToWrite).dump());
     }
@@ -5388,13 +5370,15 @@ Cache::markUserKeysOutOfDate(lmdb::txn &txn,
                   return;
               }
 
+
               emit userKeysUpdate(sync_token, keys);
           });
 }
 
 void
-Cache::query_keys(const std::string &user_id,
-                  std::function<void(const UserKeyCache &, mtx::http::RequestErr)> cb)
+Cache::query_keys(
+  const std::string &user_id,
+  std::function<void(const UserKeyCache &, const std::optional<mtx::http::ClientError> &)> cb)
 {
     if (user_id.size() > 255) {
         nhlog::db()->debug("Skipping device key query for user with invalid mxid: {}", user_id);
@@ -5431,8 +5415,6 @@ Cache::query_keys(const std::string &user_id,
         // Force full query for local user to workaround potential sync token desync/server bugs
         if (user_id != localUserId_.toStdString())
              req.token = last_changed;
-        else
-             nhlog::db()->warn("Forcing full key query for local user {}", user_id);
     }
 
     // use context object so that we can disconnect again
@@ -5456,24 +5438,14 @@ Cache::query_keys(const std::string &user_id,
       [cb, user_id, last_changed, this](const mtx::responses::QueryKeys &res,
                                         mtx::http::RequestErr err) {
           if (err) {
-              nhlog::net()->warn("failed to query device keys: {},{}",
-                                 mtx::errors::to_string(err->matrix_error.errcode),
+              nhlog::net()->warn("failed to query device keys: {}, {}",
+                                 err->matrix_error.error,
                                  static_cast<int>(err->status_code));
               cb({}, err);
               return;
           }
 
-          // Ensure the user is in the response, so that we update the cache entry.
-          // This fixes the infinite loop where updated_at != last_changed.
-          auto res_ = res;
-          if (res_.device_keys.find(user_id) == res_.device_keys.end() &&
-              res_.master_keys.find(user_id) == res_.master_keys.end() &&
-              res_.user_signing_keys.find(user_id) == res_.user_signing_keys.end() &&
-              res_.self_signing_keys.find(user_id) == res_.self_signing_keys.end()) {
-              res_.device_keys[user_id] = {};
-          }
-
-          emit userKeysUpdate(last_changed, res_);
+          emit userKeysUpdate(last_changed, res);
           emit userKeysUpdateFinalize(user_id);
       });
 }
@@ -6002,6 +5974,12 @@ void
 updateUserKeys(const std::string &sync_token, const mtx::responses::QueryKeys &keyQuery)
 {
     instance_->updateUserKeys(sync_token, keyQuery);
+}
+
+void
+markUserKeysOutOfDate(const std::vector<std::string> &user_ids)
+{
+    instance_->markUserKeysOutOfDate(user_ids);
 }
 
 // device & user verification cache

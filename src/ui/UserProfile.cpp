@@ -389,6 +389,7 @@ UserProfile::updateVerificationStatus()
                   return;
               }
               for (const auto &d : allDevs.devices) {
+                  nhlog::ui()->info("Query devices returned device: {}", d.device_id);
                   // First, check if we already have an entry for this device
                   bool found = false;
                   for (auto &e : deviceInfo) {
