@@ -35,6 +35,7 @@ public:
         Unfliptable,
         Sovietflip,
         ClearTimeline,
+        ClearCache,
         ResetState,
         RotateMegolmSession,
         Md,

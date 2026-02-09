@@ -65,6 +65,8 @@ CommandCompleter::data(const QModelIndex &index, int role) const
                 return QStringLiteral("/sovietflip");
             case ClearTimeline:
                 return QStringLiteral("/clear-timeline");
+            case ClearCache:
+                return QStringLiteral("/clear-cache");
             case ResetState:
                 return QStringLiteral("/reset-state");
             case RotateMegolmSession:
@@ -150,6 +152,8 @@ CommandCompleter::data(const QModelIndex &index, int role) const
                 return QStringLiteral("/sovietflip");
             case ClearTimeline:
                 return QStringLiteral("/clear-timeline");
+            case ClearCache:
+                return QStringLiteral("/clear-cache");
             case ResetState:
                 return QStringLiteral("/reset-state");
             case RotateMegolmSession:
@@ -238,6 +242,8 @@ CommandCompleter::data(const QModelIndex &index, int role) const
                 return tr("ノ┬─┬ノ ︵ ( \\o°o)\\");
             case ClearTimeline:
                 return tr("Clear the currently cached messages in this room.");
+            case ClearCache:
+                return tr("Clear the entire cache and restart Nheko.");
             case ResetState:
                 return tr("Refetch the state in this room.");
             case RotateMegolmSession:

@@ -4399,6 +4399,7 @@ Cache::clearTimeline(const std::string &room_id)
                 std::string event_id = obj["event_id"].get<std::string>();
 
                 if (!event_id.empty()) {
+                    nhlog::db()->debug("Deleting event: {}", event_id);
                     evToOrderDb.del(txn, event_id);
                     eventsDb.del(txn, event_id);
                     relationsDb.del(txn, event_id);
@@ -4414,8 +4415,14 @@ Cache::clearTimeline(const std::string &room_id)
             lmdb::cursor_del(cursor);
         } else {
             preserved_events++;
-            if (obj.count("prev_batch") != 0 && preserved_events > 100)
+            bool has_token = obj.count("prev_batch") != 0;
+            nhlog::db()->debug("Checking event: {}. Preserved: {}. Has token: {}",
+                               obj.value("event_id", "unknown"), preserved_events, has_token);
+
+            if (has_token && preserved_events > 100) {
+                nhlog::db()->debug("Pagination token hit after 100 events. Deleting rest.");
                 passed_pagination_token = true;
+            }
         }
     }
 

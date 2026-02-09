@@ -9,6 +9,7 @@
 #include <QDropEvent>
 #include <QFileDialog>
 #include <QGuiApplication>
+#include <QCoreApplication>
 #include <QInputMethod>
 #include <QMediaMetaData>
 #include <QMediaPlayer>
@@ -266,6 +267,7 @@ InputBar::updateTextContentProperties(const QString &t, bool charDeleted)
                                              QStringLiteral("unfliptable"),
                                              QStringLiteral("sovietflip"),
                                              QStringLiteral("clear-timeline"),
+                                             QStringLiteral("clear-cache"),
                                              QStringLiteral("reset-state"),
                                              QStringLiteral("rotate-megolm-session"),
                                              QStringLiteral("md"),
@@ -973,6 +975,9 @@ InputBar::command(const QString &command, QString args)
         room->clearTimeline();
     } else if (command == QLatin1String("reset-state")) {
         room->resetState();
+    } else if (command == QLatin1String("clear-cache")) {
+        cache::deleteData();
+        QCoreApplication::quit();
     } else if (command == QLatin1String("rotate-megolm-session")) {
         cache::dropOutboundMegolmSession(room->roomId().toStdString());
     } else if (command == QLatin1String("md")) {
