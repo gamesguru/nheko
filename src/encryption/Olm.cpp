@@ -1112,6 +1112,11 @@ handle_key_request_message(const mtx::events::DeviceEvent<mtx::events::msg::KeyR
         return;
     }
 
+    if (req.content.requesting_device_id == http::client()->device_id()) {
+        nhlog::crypto()->debug("ignoring key request {} from own device", req.content.request_id);
+        return;
+    }
+
     // Check that the requested session_id and the one we have saved match.
     MegolmSessionIndex index{};
     index.room_id    = req.content.room_id;

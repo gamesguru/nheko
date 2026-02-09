@@ -4381,6 +4381,7 @@ Cache::clearTimeline(const std::string &room_id)
 
     bool start                   = true;
     bool passed_pagination_token = false;
+    int preserved_events         = 0;
     while (cursor.get(indexVal, val, start ? MDB_LAST : MDB_PREV)) {
         start = false;
         nlohmann::json obj;
@@ -4412,7 +4413,8 @@ Cache::clearTimeline(const std::string &room_id)
             }
             lmdb::cursor_del(cursor);
         } else {
-            if (obj.count("prev_batch") != 0)
+            preserved_events++;
+            if (obj.count("prev_batch") != 0 && preserved_events > 100)
                 passed_pagination_token = true;
         }
     }
