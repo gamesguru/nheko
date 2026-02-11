@@ -25,8 +25,8 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15" CACHE STRING "macos deployment target")
 option(HUNTER_ENABLED "Enable Hunter package manager" OFF)
 include("cmake/HunterGate.cmake")
 HunterGate(
-    URL "https://github.com/cpp-pm/hunter/archive/v0.26.1.tar.gz"
-    SHA1 "e41ac7a18c49b35ebac99ff2b5244317b2638a65"
+    URL "https://github.com/cpp-pm/hunter/archive/v0.26.6.tar.gz"
+    SHA1 "e70c29f878f5d5f5cdf1b9ccd628fb872e8624a8"
     LOCAL
 )
 
@@ -171,6 +171,8 @@ else()
         pkg_check_modules(libevent_pthreads REQUIRED IMPORTED_TARGET libevent_pthreads)
     endif()
 endif()
+
+pkg_check_modules(LIBBSD IMPORTED_TARGET libbsd)
 
 # curl
 if(USE_BUNDLED_LIBCURL)
@@ -929,7 +931,11 @@ target_link_libraries(nheko PRIVATE
     nlohmann_json::nlohmann_json
     lmdbxx::lmdbxx
     liblmdb::lmdb)
-    
+
+if(TARGET PkgConfig::LIBBSD)
+    target_link_libraries(nheko PRIVATE PkgConfig::LIBBSD)
+endif()
+
 if(UNIX)
     # for wayland activation tokens
     target_link_libraries(nheko PRIVATE Qt::GuiPrivate)
