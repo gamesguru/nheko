@@ -33,12 +33,10 @@ Flow {
             rightPadding: textMetrics.height / 2
 
             background: Rectangle {
-                anchors.centerIn: parent
+                anchors.fill: parent
                 border.color: reaction.hovered ? palette.text : gentleText
                 border.width: 1
                 color: reaction.hovered ? palette.highlight : (modelData.selfReactedEvent !== '' ? gentleHighlight : palette.window)
-                implicitHeight: reaction.implicitHeight
-                implicitWidth: reaction.implicitWidth
                 radius: reaction.height / 2
             }
             contentItem: Row {
@@ -50,14 +48,16 @@ Flow {
                     elide: Text.ElideRight
                     elideWidth: 150
                     font.family: Settings.emojiFont != "" ? Settings.emojiFont : undefined
+                    font.pixelSize: reaction.font.pixelSize * Settings.emojiSize
                     text: modelData.displayKey
                 }
                 Text {
                     id: reactionText
 
-                    anchors.baseline: reactionCounter.baseline
+                    anchors.verticalCenter: divider.verticalCenter
                     color: (reaction.hovered || modelData.selfReactedEvent !== '') ? palette.highlightedText : palette.text
                     font.family: Settings.emojiFont != "" ? Settings.emojiFont : undefined
+                    font.pixelSize: reaction.font.pixelSize * Settings.emojiSize
                     textFormat: TextEdit.RichText
                     maximumLineCount: 1
                     text: {
@@ -84,7 +84,7 @@ Flow {
                     id: divider
 
                     color: reaction.hovered ? palette.text : gentleText
-                    height: Math.floor(reactionCounter.implicitHeight * 1.4)
+                    height: Math.max(textMetrics.height, Math.floor(reactionCounter.implicitHeight * 1.4))
                     width: 1
                 }
                 Text {
