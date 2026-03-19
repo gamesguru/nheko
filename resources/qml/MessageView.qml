@@ -445,7 +445,10 @@ Item {
                 title: qsTr("Pin Message")
                 text: qsTr("Are you sure you want to pin this message?")
                 buttons: P.MessageDialog.Ok | P.MessageDialog.Cancel
-                onOkClicked: targetRoom.pin(eventId)
+                onOkClicked: {
+                    if (targetRoom)
+                        targetRoom.pin(eventId)
+                }
             }
         }
 
@@ -463,7 +466,10 @@ Item {
                 title: qsTr("Unpin Message")
                 text: qsTr("Are you sure you want to unpin this message?")
                 buttons: P.MessageDialog.Ok | P.MessageDialog.Cancel
-                onOkClicked: targetRoom.unpin(eventId)
+                onOkClicked: {
+                    if (targetRoom)
+                        targetRoom.unpin(eventId)
+                }
             }
         }
 
