@@ -4420,6 +4420,7 @@ Cache::clearTimeline(const std::string &room_id)
 
     auto msgCursor = lmdb::cursor::open(txn, order2msgDb);
     start          = true;
+    bool broke     = false;
     while (msgCursor.get(indexVal, val, start ? MDB_LAST : MDB_PREV)) {
         start = false;
 
@@ -4442,11 +4443,13 @@ Cache::clearTimeline(const std::string &room_id)
             }
         }
 
-        if (!found)
+        if (!found) {
+            broke = true;
             break;
+        }
     }
 
-    if (!start) {
+    if (broke) {
         do {
             lmdb::cursor_del(msgCursor);
         } while (msgCursor.get(indexVal, val, MDB_PREV));
