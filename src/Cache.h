@@ -48,6 +48,8 @@ std::optional<UserKeyCache>
 userKeys(const std::string &user_id);
 void
 updateUserKeys(const std::string &sync_token, const mtx::responses::QueryKeys &keyQuery);
+void
+addUserMasterKey(const std::string &user_id, const mtx::crypto::CrossSigningKeys &keys);
 
 // device & user verification cache
 std::optional<VerificationStatus>

@@ -11,39 +11,55 @@ Image {
     id: stateImg
 
     property bool encrypted: false
+    property var encryptionInfo: ({})
     property bool hovered: ma.hovered
     property string sourceUrl: {
         if (!encrypted)
             return "image://colorimage/" + unencryptedIcon + "?";
+
         switch (trust) {
         case Crypto.Verified:
             return "image://colorimage/:/icons/icons/ui/shield-filled-checkmark.svg?";
         case Crypto.TOFU:
             return "image://colorimage/:/icons/icons/ui/shield-filled.svg?";
         case Crypto.Unverified:
-        case Crypto.MessageUnverified:
             return "image://colorimage/:/icons/icons/ui/shield-filled-exclamation-mark.svg?";
+        case Crypto.MessageUnverified:
+            return Settings.mildKeyWarning ? "image://colorimage/:/icons/icons/ui/shield-filled-checkmark.svg?" : "image://colorimage/:/icons/icons/ui/shield-filled-exclamation-mark.svg?";
         default:
             return "image://colorimage/:/icons/icons/ui/shield-filled-cross.svg?";
         }
     }
+
     property int trust: Crypto.Unverified
-    property color unencryptedColor: Nheko.theme.error
+
+    property color unencryptedColor: Nheko.theme.orange
     property color unencryptedHoverColor: unencryptedColor
     property string unencryptedIcon: ":/icons/icons/ui/shield-filled-cross.svg"
 
     ToolTip.text: {
+        var deviceId = encryptionInfo && encryptionInfo.deviceId ? encryptionInfo.deviceId : "";
+        var debugInfo = "";
+        if (encryptionInfo) {
+            if (encryptionInfo.sessionId) debugInfo += "\n\nSession ID: " + encryptionInfo.sessionId;
+            if (encryptionInfo.deviceId) debugInfo += "\nDevice ID: " + encryptionInfo.deviceId;
+            if (encryptionInfo.senderKey) debugInfo += "\nSender Key: " + encryptionInfo.senderKey;
+        }
+        
         if (!encrypted)
             return qsTr("This message is not encrypted!");
         switch (trust) {
         case Crypto.Verified:
-            return qsTr("Encrypted by a verified device");
+            return deviceId ? qsTr("Encrypted by verified device: %1").arg(deviceId) : qsTr("Encrypted by a verified device");
         case Crypto.TOFU:
-            return qsTr("Encrypted by an unverified device, but you have trusted that user so far.");
+            var tofu = deviceId ? qsTr("Encrypted by unverified device %1, but you have trusted that user so far.").arg(deviceId) : qsTr("Encrypted by an unverified device, but you have trusted that user so far.");
+            return tofu + debugInfo;
         case Crypto.MessageUnverified:
-            return qsTr("Key is from an untrusted source, possibly forwarded from another user or the online key backup. For this reason we can't verify who sent the message.");
+            return qsTr("Key is from an untrusted source.") + debugInfo;
+        case Crypto.Unverified:
         default:
-            return qsTr("Encrypted by an unverified device.");
+            var unv = deviceId ? qsTr("Encrypted by unverified device: %1").arg(deviceId) : qsTr("Encrypted by an unverified device.");
+            return unv + debugInfo;
         }
     }
     ToolTip.visible: stateImg.hovered

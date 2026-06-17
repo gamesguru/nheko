@@ -1251,8 +1251,11 @@ ChatPage::currentPresence() const
 void
 ChatPage::verifyOneTimeKeyCountAfterStartup()
 {
+    auto req = olm::client()->create_upload_keys_request();
+    restoreSelfSignature(req);
+
     http::client()->upload_keys(
-      olm::client()->create_upload_keys_request(),
+      req,
       [this](const mtx::responses::UploadKeys &res, mtx::http::RequestErr err) {
           if (err) {
               nhlog::crypto()->warn("failed to update one-time keys: {}", err);
@@ -1306,8 +1309,11 @@ ChatPage::ensureOneTimeKeyCount(const std::map<std::string_view, uint16_t> &coun
             nhlog::crypto()->info("uploading {} {} keys", nkeys, mtx::crypto::SIGNED_CURVE25519);
             olm::client()->generate_one_time_keys(nkeys, replace_fallback_key);
 
+            auto req = olm::client()->create_upload_keys_request();
+            restoreSelfSignature(req);
+
             http::client()->upload_keys(
-              olm::client()->create_upload_keys_request(),
+              req,
               [replace_fallback_key, this](const mtx::responses::UploadKeys &,
                                            mtx::http::RequestErr err) {
                   if (err) {
@@ -1348,12 +1354,44 @@ ChatPage::removeOldFallbackKey()
 }
 
 void
+ChatPage::restoreSelfSignature(mtx::requests::UploadKeys &req)
+{
+    // Preserve self-signatures if available in cache.
+    // This prevents overwriting signed keys on the server with unsigned ones on startup.
+    if (req.device_keys.device_id == http::client()->device_id()) {
+        auto myUser   = http::client()->user_id().to_string();
+        auto myDevice = http::client()->device_id();
+        if (auto keys = cache::client()->userKeys(myUser)) {
+            if (keys->device_keys.count(myDevice)) {
+                const auto &cachedKey = keys->device_keys.at(myDevice);
+                // Only restore cached signatures if the cached device keys match the current ones.
+                if (cachedKey.keys == req.device_keys.keys) {
+                    if (cachedKey.signatures.count(myUser)) {
+                        for (const auto &[key_id, signature] : cachedKey.signatures.at(myUser)) {
+                            req.device_keys.signatures[myUser][key_id] = signature;
+                            nhlog::crypto()->debug("Restored self-signature for {} from cache",
+                                                   key_id);
+                        }
+                    }
+                } else {
+                    nhlog::crypto()->warn(
+                      "Not restoring self-signatures for device {}: cached keys differ "
+                      "from current device keys",
+                      myDevice);
+                }
+            }
+        }
+    }
+}
+
+void
 ChatPage::getProfileInfo()
 {
     const auto userid = utils::localUser().toStdString();
 
     http::client()->get_profile(
       userid, [this](const mtx::responses::Profile &res, mtx::http::RequestErr err) {
+
           if (err) {
               nhlog::net()->warn("failed to retrieve own profile info");
               return;
@@ -1397,11 +1435,13 @@ ChatPage::getBackupVersion()
                   using namespace mtx::crypto;
                   auto pubkey = CURVE25519_public_key_from_private(to_binary_buf(base642bin(*key)));
 
-                  if (auth_data["public_key"].get<std::string>() != pubkey) {
+                  auto serverKey = auth_data["public_key"].get<std::string>();
+                  if (serverKey != pubkey &&
+                      mtx::crypto::base642bin(serverKey) != pubkey) {
                       nhlog::crypto()->info("Our backup key {} does not match the one "
                                             "used in the online backup {}",
                                             pubkey,
-                                            auth_data["public_key"].get<std::string>());
+                                            serverKey);
                       cache::client()->deleteBackupVersion();
                       return;
                   }

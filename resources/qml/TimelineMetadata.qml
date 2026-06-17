@@ -22,6 +22,7 @@ RowLayout {
     required property string threadId
     required property date timestamp
     required property Room room
+    required property var encryptionInfo
 
     spacing: 2
 
@@ -70,6 +71,7 @@ RowLayout {
         sourceSize.width: parent.iconSize
         trust: metadata.trustlevel
         visible: metadata.room.isEncrypted
+        encryptionInfo: metadata.encryptionInfo
     }
     Label {
         id: ts

@@ -25,6 +25,7 @@ class CallManager;
 
 namespace mtx::requests {
 struct CreateRoom;
+struct UploadKeys;
 }
 namespace mtx::responses {
 struct Notifications;
@@ -189,6 +190,7 @@ private:
     void removeOldFallbackKey();
     void getProfileInfo();
     void getBackupVersion();
+    void restoreSelfSignature(mtx::requests::UploadKeys &req);
 
     void loadStateFromCache();
     void resetUI();

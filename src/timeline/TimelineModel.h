@@ -261,6 +261,7 @@ public:
         IsEncrypted,
         IsStateEvent,
         Trustlevel,
+        EncryptionInfo,
         Notificationlevel,
         EncryptionError,
         ReplyTo,
@@ -273,6 +274,10 @@ public:
         CallType,
         Dump,
         RelatedEventCacheBuster,
+        /// debug: session_id, sender_key, device_id
+        SessionId,
+        SenderKey,
+        DeviceId,
     };
     Q_ENUM(Roles);
 

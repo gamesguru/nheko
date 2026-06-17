@@ -153,6 +153,8 @@ public:
 public slots:
     //! unverifies a device
     void unverify();
+    //! manually verifies a device
+    void verify();
     //! Continues the flow
     void next();
     //! Cancel the flow

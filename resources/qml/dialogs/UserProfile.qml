@@ -481,7 +481,6 @@ ApplicationWindow {
                         profile.verify(deviceId);
                     }
                 }
-
             }
         }
 
